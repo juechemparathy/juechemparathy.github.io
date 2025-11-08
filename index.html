@@ -2,31 +2,47 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Smash Signup</title>
+    <meta
+            name="viewport"
+            content="width=device-width, initial-scale=1.0, viewport-fit=cover"
+    />
+    <title>Court Scheduling</title>
     <link rel="stylesheet" href="style.css" />
 
-    <!-- Firebase SDKs (Compat Version) -->
+    <!-- Firebase SDKs (Compat builds for simple <script> use) -->
     <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
 </head>
-
 <body>
-<header>
-    <h1>🏐 Smash Signup</h1>
-    <div id="userInfo"></div>
+<header class="topbar">
+    <h1>🏟️ Court Scheduling</h1>
+    <div id="userBox"></div>
 </header>
 
-<main id="slots">Loading slots...</main>
+<main class="container">
+    <section class="legend">
+        <div><span class="pill p0">P0</span> Priority 0 (Main)</div>
+        <div><span class="pill p1">P1</span> Priority 1 (Fallback)</div>
+        <div><span class="pill active">●</span> Currently Active</div>
+    </section>
 
-<footer>
-    <div>📅 My Games</div>
-    <div>👥 Players</div>
-    <div>🔔 Alerts</div>
+    <section id="weekGrid" class="grid"></section>
+</main>
+
+<footer class="footer">
+    <div>📅 Weekly Grid</div>
+    <div>👥 Signups</div>
+    <div>🔔 Status</div>
 </footer>
 
+<!-- Your Firebase config -->
 <script src="firebase-config.js"></script>
-<script src="script.js"></script>
+
+<!-- App logic -->
+<script src="app.js"></script>
+
+<!-- Optional: run once to seed your schedule (uncomment to run) -->
+<!-- <script src="seed.js"></script> -->
 </body>
 </html>

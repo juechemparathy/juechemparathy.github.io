@@ -10,3 +10,9 @@ const firebaseConfig = {
 firebase.initializeApp(firebaseConfig);
 const db = firebase.firestore();
 const auth = firebase.auth();
+
+/* OPTIONAL: restrict to your domain in Firebase console:
+   Authentication → Settings → Authorized domains → add:
+   - localhost
+   - yourusername.github.io
+*/
