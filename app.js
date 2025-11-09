@@ -6,6 +6,7 @@ const TIME_BLOCKS = [
   { id: "1-5",   label: "1–5 PM" },
   { id: "6-9",   label: "6–9 PM" },
   { id: "8-10",  label: "8–10 PM" },
+  { id: "8-10TT",  label: "8–10 PM (TT Room)" },
   { id: "9-11",  label: "9–11 PM" },
 ];
 const DAYS = ["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
@@ -301,12 +302,15 @@ async function seedWeeklyData() {
   const schedule = {
         "Sunday": {
           "1-5":  { p0: "Volleyball", p1: "Pickleball" },
-          "6-9":  { p0: "Pickleball", p1: "Open Badminton" }
+          "6-9":  { p0: "Pickleball", p1: "Open Badminton" },
+          "8-10TT": { p0: "Table Tennis", p1: "Table Tennis" }
         },
       "Monday": {
         "6-8":  { p0: "Pickleball", p1: "Open Badminton" },
         "1-5":  { p0: "Open Badminton", p1: "Pickleball" },
-        "8-10": { p0: "Pickleball", p1: "Open Badminton" }
+        "8-10": { p0: "Pickleball", p1: "Open Badminton" },
+        "8-10TT": { p0: "Table Tennis", p1: "Table Tennis" }
+
       },
       "Tuesday": {
         "6-8":  { p0: "Pickleball", p1: "Open Badminton" },
