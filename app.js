@@ -8,7 +8,7 @@ const TIME_BLOCKS = [
   { id: "8-10",  label: "8–10 PM" },
   { id: "9-11",  label: "9–11 PM" },
 ];
-const DAYS = ["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"];
+const DAYS = ["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
 
 /* sport meta for color + min/max defaults (used when seeding and for badges) */
 const SPORT_META = {
@@ -44,8 +44,8 @@ function renderUser() {
     userBox.innerHTML = `
       <span style="margin-right:8px;">Hi, ${currentUser.displayName}</span>
       ${isAdmin ? `
-        <button id="seedBtn" title="Seed weekly schedule">Seed</button>
-        <button id="backupBtn" title="Backup and Reset Week">Backup & Reset</button>
+        <button id="seedBtn" title="Only once, or when adding/removing time slots or changing schedule template ; Creates /slots collection with default structure">Seed</button>
+        <button id="backupBtn" title="Every Sunday Night(manual); Clears signups, moves cutoffs, backs up last week’s data">Backup & Reset</button>
       ` : ""}
       <button id="logoutBtn">Sign out</button>
     `;
@@ -125,12 +125,22 @@ function renderGrid(byDay) {
       TIME_BLOCKS.findIndex(t=>t.id===a.blockId) - TIME_BLOCKS.findIndex(t=>t.id===b.blockId)
     );
 
+// Calculating date
+const today = new Date();
+const todayIndex = today.getDay(); // Sunday = 0
+
+// Calculate the date for each day in the current week
+const diff = (dayIndex - todayIndex + 7) % 7;
+const date = new Date();
+date.setDate(today.getDate() + diff);
+const dayLabel = `${day} – ${date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`;
+
     const card = document.createElement("div");
     card.className = "card";
 
     const header = document.createElement("div");
     header.className = "header";
-    header.innerHTML = `<div class="day">${day}</div>`;
+    header.innerHTML = `<div class="day">${dayLabel}</div>`;
     card.appendChild(header);
 
     if (daySlots.length === 0) {
@@ -290,6 +300,10 @@ async function seedWeeklyIfEmpty() {
 /* Seed helper (uses same data from your prompt) */
 async function seedWeeklyData() {
   const schedule = {
+        "Sunday": {
+          "1-5":  { p0: "Volleyball", p1: "Pickleball" },
+          "6-9":  { p0: "Pickleball", p1: "Open Badminton" }
+        },
       "Monday": {
         "6-8":  { p0: "Pickleball", p1: "Open Badminton" },
         "1-5":  { p0: "Open Badminton", p1: "Pickleball" },
@@ -320,10 +334,6 @@ async function seedWeeklyData() {
         "6-8":  { p0: "Volleyball", p1: "Pickleball" },
         "1-5":  { p0: "Kids Games", p1: "Pickleball" },
         "6-9":  { p0: "Basketball", p1: "Open Badminton" }
-      },
-      "Sunday": {
-        "1-5":  { p0: "Volleyball", p1: "Pickleball" },
-        "6-9":  { p0: "Pickleball", p1: "Open Badminton" }
       }
     };
 
