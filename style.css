@@ -2,7 +2,7 @@
   --bg:#f6f7fb; --fg:#1f2937; --card:#fff; --muted:#6b7280;
   --p0:#10b981; --p1:#f59e0b; --active:#3b82f6; --border:#e5e7eb;
   --volleyball:#d946ef; --badminton:#06b6d4; --pickleball:#22c55e;
-  --basketball:#f97316; --tt:#8b5cf6; --kids:#14b8a6;
+  --basketball:#f97316; --tt:#8b5cf6; --kids:#14b8a6; --timecolor:#c90c35;
 }
 *{box-sizing:border-box}
 body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;background:var(--bg);color:var(--fg)}
@@ -19,7 +19,7 @@ body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-ser
 .card{background:var(--card);border:1px solid var(--border);border-left-width:6px;border-radius:14px;padding:12px}
 .header{display:flex;justify-content:space-between;gap:8px;margin-bottom:6px}
 .day{font-weight:700}
-.slot{font-size:12px;color:var(--muted)}
+.slot{font-weight:700;color:var(--timecolor)}
 .row{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:6px 0}
 .badge{font-size:12px;padding:2px 8px;border-radius:999px;background:#eef2ff;color:#4338ca}
 .sport{font-weight:700;padding:2px 8px;border-radius:8px;color:#fff}

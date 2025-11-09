@@ -201,14 +201,6 @@ function renderPriorityRow(slot, prio, isActive) {
 
   row.appendChild(sportSpan);
   row.appendChild(tag);
-  if (isActive) {
-    const a = document.createElement("span");
-    a.className = "badge";
-    a.style.background = "#e0f2fe";
-    a.style.color = "#0369a1";
-    a.textContent = "Currently Active";
-    row.appendChild(a);
-  }
 
   // players
   const playersList = document.createElement("div");
