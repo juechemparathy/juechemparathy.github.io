@@ -12,10 +12,10 @@ const DAYS = ["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Satur
 
 /* sport meta for color + min/max defaults (used when seeding and for badges) */
 const SPORT_META = {
-  "Open Badminton":     { key:"badminton", min:4, max:12 },
-  "Women’s Badminton":  { key:"badminton", min:4, max:12 },
-  "Pickleball":         { key:"pickleball", min:4, max:12 },
-  "Women’s Pickleball": { key:"pickleball", min:4, max:12 },
+  "Open Badminton":     { key:"badminton", min:4, max:8 },
+  "Women’s Badminton":  { key:"badminton", min:4, max:8 },
+  "Pickleball":         { key:"pickleball", min:4, max:8 },
+  "Women’s Pickleball": { key:"pickleball", min:4, max:8 },
   "Volleyball":         { key:"volleyball", min:8, max:14 },
   "Basketball":         { key:"basketball", min:6, max:12 },
   "Table Tennis":       { key:"tabletennis", min:4, max:8 },
@@ -150,7 +150,7 @@ const dayLabel = `${day} – ${date.toLocaleDateString('en-US', { month: 'short'
       card.appendChild(empty);
     } else {
 //      daySlots.forEach(slot => card.appendChild(renderSlot(slot)));
-daySlots.forEach((slot, index) => {
+  daySlots.forEach((slot, index) => {
   const slotElement = renderSlot(slot);
   card.appendChild(slotElement);
 
@@ -177,8 +177,7 @@ function renderSlot(slot) {
   top.className = "row";
   top.innerHTML = `
     <div class="slot">${block?.label ?? slot.blockId}
-      ${active === 0 ? ' <span class="pill active">Active</span>' : ''}
-      ${active === 1 ? ' <span class="pill active">Active</span>' : ''}
+      ${active === 1 ? '<span class="pill active">Active</span>' : ''}
     </div>
   `;
   wrap.appendChild(top);
@@ -340,19 +339,29 @@ async function seedWeeklyData() {
   const batch = db.batch();
   Object.entries(schedule).forEach(([day, blocks]) => {
     const dayIndex = DAYS.indexOf(day);
+
+      const cutoff = new Date();
+      const today = new Date();
+      const todayIndex = new Date().getDay(); // make Sunday=0
+const diff = dayIndex - todayIndex ;
+const date = new Date();
+date.setDate(today.getDate() + diff);
+//const dayDate = `${date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`;
+const dayDate = `${date.toString()}`;
+
     Object.entries(blocks).forEach(([blockId, def]) => {
       const p0meta = SPORT_META[def.p0] || {};
       const p1meta = SPORT_META[def.p1] || {};
       const docRef = db.collection("slots").doc(`${dayIndex}_${blockId}`);
 
       // cutoff = next occurrence of this day at DEFAULT_CUTOFF_HOUR local
-      const cutoff = new Date();
-      const todayIndex = new Date().getDay(); // make Sunday=0
+
       const delta = dayIndex - todayIndex;
       cutoff.setDate(cutoff.getDate() + delta);
       cutoff.setHours(DEFAULT_CUTOFF_HOUR, 0, 0, 0);
 
       batch.set(docRef, {
+        dayDate,
         day,
         dayIndex,
         blockId,
