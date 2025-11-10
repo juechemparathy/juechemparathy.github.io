@@ -36,7 +36,7 @@ const ADMIN_EMAILS = [
 ];
 
 let currentUser = null;
-let showAllSignups = true; // Admin toggle state - default to show all sign-ups
+let showAllSignups = false; // Admin toggle state - default to show Upcoming
 
 /*********************
  * UTILITY FUNCTIONS
