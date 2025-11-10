@@ -1,3 +1,6 @@
+
+
+
 const firebaseConfig = {
   apiKey: "AIzaSyDQbVnLH0A6uL-N43ptBVNI4hDB3BE2Rls",
   authDomain: "smash-26679.firebaseapp.com",
@@ -6,6 +9,7 @@ const firebaseConfig = {
   messagingSenderId: "877402703377",
   appId: "1:877402703377:web:65db65464dbd385f6b53b0",
 };
+
 
 firebase.initializeApp(firebaseConfig);
 const db = firebase.firestore();

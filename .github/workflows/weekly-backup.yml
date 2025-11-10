@@ -1,0 +1,45 @@
+name: Weekly Firestore Backup
+
+on:
+  workflow_dispatch:
+    inputs:
+      reason:
+        description: "Optional note for why this backup was triggered manually"
+        required: false
+        default: "Manual trigger"
+  schedule:
+    # Every Saturday at 23:00 UTC (adjust schedule if a different timezone is required)
+    - cron: "0 23 * * 6"
+
+jobs:
+  run-backup:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Run backup script
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          BACKUP_REASON: ${{ github.event.inputs.reason || 'scheduled-run' }}
+        run: npm run backup
+
+      - name: Commit and push backup artifacts
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          if git status --short backups | grep -q .; then
+            git add backups
+            git commit -m "chore: backup $(date -u +'%Y-%m-%dT%H:%M:%SZ')"
+            git push
+          else
+            echo "No backup changes to commit."
+          fi
