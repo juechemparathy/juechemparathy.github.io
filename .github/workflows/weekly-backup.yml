@@ -2,6 +2,11 @@ name: Weekly Firestore Backup
 
 on:
   workflow_dispatch:
+    inputs:
+      reason:
+        description: "Optional note for why this backup was triggered manually"
+        required: false
+        default: "Manual trigger"
   schedule:
     # Every Saturday at 23:00 UTC (adjust schedule if a different timezone is required)
     - cron: "0 23 * * 6"
@@ -25,4 +30,5 @@ jobs:
       - name: Run backup script
         env:
           FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          BACKUP_REASON: ${{ github.event.inputs.reason || 'scheduled-run' }}
         run: npm run backup
