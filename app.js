@@ -558,8 +558,8 @@ function renderSlotCard(slot, prio) {
   btnbar.appendChild(joinBtn);
   btnbar.appendChild(leaveBtn);
 
-  // Add guest button for admins
-  if (isAdmin && p.sport !== "No Games" && (p.players || []).length < maxPlayers) {
+  // Add guest button for all users
+  if (currentUser && p.sport !== "No Games" && (p.players || []).length < maxPlayers) {
     const addGuestBtn = document.createElement("button");
     addGuestBtn.className = "btn guest-btn";
     addGuestBtn.textContent = "+ Guest";
