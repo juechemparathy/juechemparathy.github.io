@@ -481,6 +481,8 @@ function renderSlotCard(slot, prio) {
 
   const playersList = document.createElement("div");
   playersList.className = "players";
+  const isAdmin = currentUser && ADMIN_EMAILS.includes(currentUser.email);
+  
   if ((p.players || []).length === 0) {
     const empty = document.createElement("span");
     empty.className = "empty";
@@ -488,6 +490,9 @@ function renderSlotCard(slot, prio) {
     playersList.appendChild(empty);
   } else {
     (p.players || []).forEach((pl, index) => {
+      const playerWrapper = document.createElement("span");
+      playerWrapper.className = "player-wrapper";
+      
       const chip = document.createElement("span");
       // Add waiting-list class if player is beyond mainLimit
       if (index >= mainLimit) {
@@ -495,8 +500,33 @@ function renderSlotCard(slot, prio) {
       } else {
         chip.className = "player";
       }
-      chip.textContent = toCamelCase(pl.name);
-      playersList.appendChild(chip);
+      // Add asterisk for guest players
+      const displayName = pl.isGuest ? `*${toCamelCase(pl.name)}` : toCamelCase(pl.name);
+      chip.textContent = displayName;
+      
+      // Add title tooltip for guest players
+      if (pl.isGuest) {
+        chip.title = `Guest - Parishioner: ${pl.parishionerName || 'N/A'}, Family ID: ${pl.familyId || 'N/A'}`;
+      }
+      
+      playerWrapper.appendChild(chip);
+      
+      // Add remove button for guest players (admin only)
+      if (pl.isGuest && isAdmin) {
+        const removeBtn = document.createElement("span");
+        removeBtn.className = "remove-guest";
+        removeBtn.textContent = "×";
+        removeBtn.title = "Remove guest player";
+        removeBtn.onclick = (e) => {
+          e.stopPropagation();
+          if (confirm(`Remove guest player ${pl.name}?`)) {
+            removeGuest(slot.id, prio, pl.uid);
+          }
+        };
+        playerWrapper.appendChild(removeBtn);
+      }
+      
+      playersList.appendChild(playerWrapper);
     });
   }
   card.appendChild(playersList);
@@ -523,6 +553,16 @@ function renderSlotCard(slot, prio) {
 
   btnbar.appendChild(joinBtn);
   btnbar.appendChild(leaveBtn);
+
+  // Add guest button for admins
+  if (isAdmin && p.sport !== "No Games" && (p.players || []).length < maxPlayers) {
+    const addGuestBtn = document.createElement("button");
+    addGuestBtn.className = "btn guest-btn";
+    addGuestBtn.textContent = "+ Guest";
+    addGuestBtn.onclick = () => showGuestModal(slot.id, prio);
+    btnbar.appendChild(addGuestBtn);
+  }
+
   card.appendChild(btnbar);
 
   return card;
@@ -604,6 +644,115 @@ function isTimeSlotInPast(dayIndex, blockId) {
   const currentTimeIn24 = currentHour + (currentMinutes / 60);
   
   return currentTimeIn24 >= endHour;
+}
+
+/*********************
+ * GUEST MODAL
+ *********************/
+function showGuestModal(slotId, prio) {
+  const modal = document.getElementById("guestModal");
+  const form = document.getElementById("guestForm");
+  
+  // Clear previous values
+  form.reset();
+  
+  // Store slot info for submission
+  form.dataset.slotId = slotId;
+  form.dataset.prio = prio;
+  
+  // Show modal
+  modal.style.display = "flex";
+}
+
+function closeGuestModal() {
+  const modal = document.getElementById("guestModal");
+  modal.style.display = "none";
+}
+
+async function submitGuest(event) {
+  event.preventDefault();
+  
+  const form = event.target;
+  const slotId = form.dataset.slotId;
+  const prio = parseInt(form.dataset.prio);
+  
+  const guestData = {
+    fullName: form.fullName.value.trim(),
+    parishionerName: form.parishionerName.value.trim(),
+    familyId: form.familyId.value.trim()
+  };
+  
+  if (!guestData.fullName || !guestData.parishionerName || !guestData.familyId) {
+    alert("Please fill in all fields");
+    return;
+  }
+  
+  await addGuest(slotId, prio, guestData);
+  closeGuestModal();
+}
+
+async function addGuest(slotId, prio, guestData) {
+  if (!currentUser) return alert("Please sign in first.");
+  const ref = db.collection("slots").doc(slotId);
+
+  await db.runTransaction(async tx => {
+    const snap = await tx.get(ref);
+    if (!snap.exists) throw new Error("Slot not found");
+    const data = snap.data();
+    const key = `p${prio}`;
+    const p = data[key] || { players: [], minPlayers: 0, maxPlayers: 0, sport: "No Games" };
+
+    // Always use the current metadata max value, ignore stored maxPlayers
+    const sportMeta = SPORT_META[p.sport] || { max: 20 };
+    const max = sportMeta.max;
+    if ((p.players || []).length >= max) throw new Error("Full");
+    
+    // Create guest player object
+    const guestPlayer = {
+      uid: `guest_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+      name: guestData.fullName,
+      isGuest: true,
+      parishionerName: guestData.parishionerName,
+      familyId: guestData.familyId,
+      addedBy: currentUser.email,
+      addedAt: new Date().toISOString()
+    };
+    
+    p.players = [...(p.players || []), guestPlayer];
+
+    // persist update
+    tx.update(ref, { [key]: p });
+
+    // recompute and persist activePriority for visibility
+    const active = computeActivePriority({ ...data, [key]: p });
+    tx.update(ref, { activePriority: active });
+  }).catch(e => alert(e.message));
+}
+
+async function removeGuest(slotId, prio, guestUid) {
+  if (!currentUser || !ADMIN_EMAILS.includes(currentUser.email)) {
+    return alert("Only admins can remove guest players.");
+  }
+  
+  const ref = db.collection("slots").doc(slotId);
+
+  await db.runTransaction(async tx => {
+    const snap = await tx.get(ref);
+    if (!snap.exists) throw new Error("Slot not found");
+    const data = snap.data();
+    const key = `p${prio}`;
+    const p = data[key] || { players: [], minPlayers: 0, maxPlayers: 0, sport: "No Games" };
+
+    // Remove the guest player
+    p.players = (p.players || []).filter(player => player.uid !== guestUid);
+
+    // persist update
+    tx.update(ref, { [key]: p });
+
+    // recompute and persist activePriority for visibility
+    const active = computeActivePriority({ ...data, [key]: p });
+    tx.update(ref, { activePriority: active });
+  }).catch(e => alert(e.message));
 }
 
 /*********************
