@@ -455,12 +455,26 @@ function renderSlotCard(slot, prio) {
   const card = document.createElement("div");
   card.className = `slot-card${active ? " active" : ""}`;
 
+  const maxPlayers = meta.max ? meta.max : 20;
+  const canAddGuest = currentUser && p.sport !== "No Games" && (p.players || []).length < maxPlayers;
+
   const top = document.createElement("div");
   top.className = "slot-time";
   top.innerHTML = `
     <span>${block?.label ?? slot.blockId}</span>
     <span class="priority-pill ${prio === 0 ? "p0" : "p1"}">${prio === 0 ? "P0" : "P1"}</span>
   `;
+  
+  // Add guest button next to priority pill
+  if (canAddGuest) {
+    const addGuestBtn = document.createElement("button");
+    addGuestBtn.className = "btn guest-btn-top";
+    addGuestBtn.innerHTML = "👥";
+    addGuestBtn.title = "Add Guest";
+    addGuestBtn.onclick = () => showGuestModal(slot.id, prio);
+    top.appendChild(addGuestBtn);
+  }
+  
   card.appendChild(top);
 
   const sportTag = document.createElement("div");
@@ -539,33 +553,25 @@ function renderSlotCard(slot, prio) {
   btnbar.className = "btnbar";
 
   // Always use the current metadata max value, ignore stored maxPlayers
-  const maxPlayers = meta.max ? meta.max : 20;
   const canJoin = currentUser && p.sport !== "No Games" && (p.players || []).length < maxPlayers;
   const isIn = !!currentUser && (p.players || []).some(pl => pl.uid === currentUser.uid);
 
   const joinBtn = document.createElement("button");
   joinBtn.className = "btn primary";
-  joinBtn.textContent = isIn ? "Joined" : "Join";
+  joinBtn.innerHTML = isIn ? "✓" : "➕";
+  joinBtn.title = isIn ? "Joined" : "Join";
   joinBtn.disabled = !currentUser || isIn || !canJoin;
   joinBtn.onclick = () => updateSignup(slot.id, prio, "join");
 
   const leaveBtn = document.createElement("button");
   leaveBtn.className = "btn";
-  leaveBtn.textContent = "Leave";
+  leaveBtn.innerHTML = "➖";
+  leaveBtn.title = "Leave";
   leaveBtn.disabled = !currentUser || !isIn;
   leaveBtn.onclick = () => updateSignup(slot.id, prio, "leave");
 
   btnbar.appendChild(joinBtn);
   btnbar.appendChild(leaveBtn);
-
-  // Add guest button for all users
-  if (currentUser && p.sport !== "No Games" && (p.players || []).length < maxPlayers) {
-    const addGuestBtn = document.createElement("button");
-    addGuestBtn.className = "btn guest-btn";
-    addGuestBtn.textContent = "+ Guest";
-    addGuestBtn.onclick = () => showGuestModal(slot.id, prio);
-    btnbar.appendChild(addGuestBtn);
-  }
 
   card.appendChild(btnbar);
 
@@ -657,18 +663,19 @@ function showGuestModal(slotId, prio) {
   const modal = document.getElementById("guestModal");
   const form = document.getElementById("guestForm");
   
-  // Clear previous values
-  form.reset();
+  // Store slot info for submission
+  form.dataset.slotId = slotId;
+  form.dataset.prio = prio;
   
-  // Auto-fill parishioner name from signed-in user
+  // Clear form fields
+  document.getElementById("fullName").value = "";
+  document.getElementById("familyId").value = "";
+  
+  // Auto-fill parishioner name from signed-in user (after clearing other fields)
   if (currentUser && currentUser.displayName) {
     const parishionerNameField = document.getElementById("parishionerName");
     parishionerNameField.value = toCamelCase(currentUser.displayName);
   }
-  
-  // Store slot info for submission
-  form.dataset.slotId = slotId;
-  form.dataset.prio = prio;
   
   // Show modal
   modal.style.display = "flex";
