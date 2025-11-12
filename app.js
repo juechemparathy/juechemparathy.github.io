@@ -660,6 +660,12 @@ function showGuestModal(slotId, prio) {
   // Clear previous values
   form.reset();
   
+  // Auto-fill parishioner name from signed-in user
+  if (currentUser && currentUser.displayName) {
+    const parishionerNameField = document.getElementById("parishionerName");
+    parishionerNameField.value = toCamelCase(currentUser.displayName);
+  }
+  
   // Store slot info for submission
   form.dataset.slotId = slotId;
   form.dataset.prio = prio;
