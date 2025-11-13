@@ -179,10 +179,14 @@ auth.onAuthStateChanged(u => {
     userPreferences = null;
     tabs.innerHTML = "";
     tabContent.innerHTML = `
-      <div class="empty" style="text-align: center; padding: 40px;">
+      <div class="title-bar" style="text-align: center; padding: 40px;">
         <p style="font-size: 18px; margin-bottom: 20px;">Please sign in to view the game schedule</p>
         <p style="color: #666;">Click the "Sign in with Google" button above to get started</p>
       </div>
+            <div class="title-bar">
+            <p>SMASH MINISTRY</p>
+            <p>St.Thomas Syro Malabar Catholic Church of San Francisco</p>
+            </div>
     `;
   }
 });
