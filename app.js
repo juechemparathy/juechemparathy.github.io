@@ -13,15 +13,14 @@ const DAYS = ["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Satur
 
 /* sport meta for color + min/max defaults (used when seeding and for badges) */
 const SPORT_META = {
-  "Open Badminton":     { key:"badminton", min:4, max:20, mainLimit:10, waitingList:10 },
-  "Women's Badminton":  { key:"badminton", min:4, max:20, mainLimit:10, waitingList:10 },
-  "Pickleball":         { key:"pickleball", min:4, max:20, mainLimit:10, waitingList:10 },
-  "Women's Pickleball": { key:"pickleball", min:4, max:20, mainLimit:10, waitingList:10 },
-  "Volleyball":         { key:"volleyball", min:8, max:25, mainLimit:14, waitingList:11 },
-  "Basketball":         { key:"basketball", min:6, max:20, mainLimit:10, waitingList:10 },
-  "Table Tennis":       { key:"tabletennis", min:4, max:20, mainLimit:10, waitingList:10 },
-  "Kids Games":         { key:"kids", min:4, max:20, mainLimit:10, waitingList:10 },
-  "No Games":           { key:"", min:0, max:0, mainLimit:0, waitingList:0 },
+  "Open Badminton":    { key:"badminton", min:4, max:20, mainLimit:10, waitingList:10 },
+  "Women Badminton":   { key:"badminton", min:4, max:20, mainLimit:10, waitingList:10 },
+  "Pickleball":        { key:"pickleball", min:4, max:20, mainLimit:10, waitingList:10 },
+  "Volleyball":        { key:"volleyball", min:8, max:25, mainLimit:14, waitingList:11 },
+  "Basketball":        { key:"basketball", min:6, max:20, mainLimit:10, waitingList:10 },
+  "Table Tennis":      { key:"tabletennis", min:4, max:20, mainLimit:10, waitingList:10 },
+  "Kids Games":        { key:"kids", min:4, max:20, mainLimit:10, waitingList:10 },
+  "No Games":          { key:"", min:0, max:0, mainLimit:0, waitingList:0 },
 };
 
 /* cutoff per slot (local time). Adjust as needed. */
@@ -49,6 +48,16 @@ function toCamelCase(name) {
     .split(' ')
     .map(word => word.charAt(0).toUpperCase() + word.slice(1))
     .join(' ');
+}
+
+// Normalize apostrophes and quotes to handle different character encodings
+function normalizeSportName(name) {
+  if (!name) return name;
+  // Replace all types of apostrophes with standard single quote
+  return name
+    .replace(/[\u2018\u2019]/g, "'")  // Smart quotes ' '
+    .replace(/[\u201C\u201D]/g, '"')  // Smart double quotes " "
+    .trim();
 }
 
 /*********************
@@ -154,6 +163,24 @@ function toggleViewMode() {
   showAllSignups = !showAllSignups;
   document.getElementById("userDropdown").classList.remove("show");
   renderUser();
+  
+  // Rebuild tabs to show all sports when in "All Sign-ups" mode
+  const sportSet = new Set();
+  latestSlots.forEach(slot => {
+    const p0Sport = slot.p0?.sport;
+    const p1Sport = slot.p1?.sport;
+    
+    // Only add sports that pass the preference filter (which includes admin override)
+    if (p0Sport && p0Sport !== "No Games" && shouldShowSport(p0Sport)) {
+      sportSet.add(p0Sport);
+    }
+    if (p1Sport && p1Sport !== "No Games" && shouldShowSport(p1Sport)) {
+      sportSet.add(p1Sport);
+    }
+  });
+  
+  const sports = ["My Games", "All Games", ...Array.from(sportSet).sort()];
+  renderTabs(sports);
   renderTabContent();
 }
 
@@ -201,14 +228,25 @@ async function loadUserPreferences() {
     // Try to load from localStorage first (faster)
     const cachedPrefs = localStorage.getItem(`prefs_${currentUser.uid}`);
     if (cachedPrefs) {
-      userPreferences = JSON.parse(cachedPrefs);
+      const parsed = JSON.parse(cachedPrefs);
+      // Normalize sports when loading from cache
+      userPreferences = {
+        ...parsed,
+        selectedSports: (parsed.selectedSports || []).map(s => normalizeSportName(s))
+      };
     }
     
     // Then load from Firestore (authoritative)
     const doc = await db.collection("userPreferences").doc(currentUser.uid).get();
     if (doc.exists) {
-      userPreferences = doc.data();
-      // Update cache
+      const data = doc.data();
+      // Normalize sports when loading from Firestore
+      userPreferences = {
+        ...data,
+        selectedSports: (data.selectedSports || []).map(s => normalizeSportName(s))
+      };
+      console.log("Loaded preferences from Firestore (normalized):", userPreferences.selectedSports);
+      // Update cache with normalized values
       localStorage.setItem(`prefs_${currentUser.uid}`, JSON.stringify(userPreferences));
     } else {
       // No preferences set - show all sports
@@ -225,23 +263,38 @@ function openPreferencesModal() {
   const checkboxContainer = document.getElementById("sportCheckboxes");
   
   // Close dropdown
-  document.getElementById("userDropdown").classList.remove("show");
+  const dropdown = document.getElementById("userDropdown");
+  if (dropdown) dropdown.classList.remove("show");
   
-  // Get all unique sports from SPORT_META
-  const allSports = Object.keys(SPORT_META).filter(sport => sport !== "No Games");
+  // Get all unique sports from SPORT_META and sort alphabetically
+  const allSports = Object.keys(SPORT_META)
+    .filter(sport => sport !== "No Games")
+    .sort();
   
   // Build checkboxes
   checkboxContainer.innerHTML = "";
   allSports.forEach(sport => {
-    const isChecked = userPreferences?.selectedSports?.includes(sport) || false;
+    const normalizedSport = normalizeSportName(sport);
+    const normalizedPrefs = (userPreferences?.selectedSports || []).map(s => normalizeSportName(s));
+    const isChecked = normalizedPrefs.includes(normalizedSport);
+    
     const checkbox = document.createElement("div");
     checkbox.className = "sport-checkbox-item";
-    checkbox.innerHTML = `
-      <label>
-        <input type="checkbox" name="sport" value="${sport}" ${isChecked ? 'checked' : ''}>
-        <span>${sport}</span>
-      </label>
-    `;
+    
+    // Create elements directly to avoid HTML escaping issues
+    const label = document.createElement("label");
+    const input = document.createElement("input");
+    input.type = "checkbox";
+    input.name = "sport";
+    input.value = normalizedSport;  // Use normalized value
+    input.checked = isChecked;
+    
+    const span = document.createElement("span");
+    span.textContent = sport;  // Display original for readability
+    
+    label.appendChild(input);
+    label.appendChild(span);
+    checkbox.appendChild(label);
     checkboxContainer.appendChild(checkbox);
   });
   
@@ -258,7 +311,13 @@ async function savePreferences() {
   const checkboxes = document.querySelectorAll('#sportCheckboxes input[type="checkbox"]');
   const selectedSports = Array.from(checkboxes)
     .filter(cb => cb.checked)
-    .map(cb => cb.value);
+    .map(cb => normalizeSportName(cb.value));  // Normalize apostrophes
+  
+  console.log("Saving preferences (normalized):", selectedSports); // Debug log
+  console.log("Character codes for each sport:"); // Debug character encoding
+  selectedSports.forEach(sport => {
+    console.log(`  "${sport}": [${Array.from(sport).map(c => c.charCodeAt(0)).join(', ')}]`);
+  });
   
   try {
     const prefsData = {
@@ -273,12 +332,16 @@ async function savePreferences() {
     userPreferences = { selectedSports };
     localStorage.setItem(`prefs_${currentUser.uid}`, JSON.stringify(userPreferences));
     
+    console.log("Preferences saved to state:", userPreferences); // Debug log
+    
     closePreferencesModal();
     
-    // Refresh the schedule to apply filters
-    renderTabContent();
-    
     alert("✅ Preferences saved successfully!");
+    
+    // Refresh the page to apply changes
+    setTimeout(() => {
+      location.reload();
+    }, 500);
   } catch (error) {
     console.error("Error saving preferences:", error);
     alert("❌ Failed to save preferences: " + error.message);
@@ -286,12 +349,25 @@ async function savePreferences() {
 }
 
 function shouldShowSport(sport) {
-  // If no preferences or empty array, show all sports
-  if (!userPreferences || !userPreferences.selectedSports || userPreferences.selectedSports.length === 0) {
+  // Admin override: if showing all sign-ups, ignore preferences
+  if (currentUser && ADMIN_EMAILS.includes(currentUser.email) && showAllSignups) {
+    console.log(`Admin mode: showing ${sport}`); // Debug
     return true;
   }
-  // Otherwise, only show selected sports
-  return userPreferences.selectedSports.includes(sport);
+  
+  // If no preferences or empty array, show all sports
+  if (!userPreferences || !userPreferences.selectedSports || userPreferences.selectedSports.length === 0) {
+    console.log(`No preferences: showing ${sport}`); // Debug
+    return true;
+  }
+  
+  // Normalize both the sport and preferences for comparison
+  const normalizedSport = normalizeSportName(sport);
+  const normalizedPrefs = userPreferences.selectedSports.map(s => normalizeSportName(s));
+  const shouldShow = normalizedPrefs.includes(normalizedSport);
+  
+  console.log(`Filter check for "${sport}" (normalized: "${normalizedSport}"):`, shouldShow, "| Preferences:", normalizedPrefs); // Debug
+  return shouldShow;
 }
 
 /*********************
@@ -333,12 +409,17 @@ function subscribeSchedule() {
     .onSnapshot(snap => {
       latestSlots = [];
       const sportSet = new Set();
+      const allSportsFound = new Set();
 
       snap.forEach(doc => {
         const data = { id: doc.id, ...doc.data() };
         latestSlots.push(data);
         const p0Sport = data.p0?.sport;
         const p1Sport = data.p1?.sport;
+        
+        // Track all sports found in database
+        if (p0Sport && p0Sport !== "No Games") allSportsFound.add(p0Sport);
+        if (p1Sport && p1Sport !== "No Games") allSportsFound.add(p1Sport);
         
         // Only add sports that pass the preference filter
         if (p0Sport && p0Sport !== "No Games" && shouldShowSport(p0Sport)) {
@@ -348,6 +429,10 @@ function subscribeSchedule() {
           sportSet.add(p1Sport);
         }
       });
+      
+      // Debug: Show all sports found in database
+      console.log("All sports found in database:", Array.from(allSportsFound));
+      console.log("Sports after preference filter:", Array.from(sportSet));
 
       const sports = [MY_GAMES_TAB, ALL_GAMES_TAB, ...Array.from(sportSet).sort()];
       if (!selectedSport || !sports.includes(selectedSport)) {
@@ -981,7 +1066,7 @@ async function seedWeeklyData() {
       "Wednesday": {
         "6-8":  { p0: "Open Badminton", p1: "Pickleball" },
         "1-5":  { p0: "Pickleball", p1: "Open Badminton" },
-        "8-10": { p0: "Women’s Badminton", p1: "Open Badminton" },
+        "8-10": { p0: "Women Badminton", p1: "Open Badminton" },
         "8-10TT": { p0: "Table Tennis", p1: "Kids Games" }
       },
       "Thursday": {
