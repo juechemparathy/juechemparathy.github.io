@@ -1,4 +1,4 @@
-const CACHE_NAME = 'smash-signup-v1';
+const CACHE_NAME = 'smash-signup-v2'; // Increment version on each deployment
 const urlsToCache = [
   '/',
   '/index.html',
