@@ -38,6 +38,34 @@ let currentUser = null;
 let showAllSignups = false; // Admin toggle state - default to show upcoming only
 let userPreferences = null; // User's sport preferences
 
+// Global function to clear all caches (can be called from console)
+window.clearAllCaches = async function() {
+  try {
+    // Clear localStorage
+    localStorage.clear();
+    console.log("✅ localStorage cleared");
+    
+    // Clear service worker caches
+    if ('caches' in window) {
+      const cacheNames = await caches.keys();
+      await Promise.all(cacheNames.map(name => caches.delete(name)));
+      console.log("✅ Service Worker caches cleared");
+    }
+    
+    // Unregister service workers
+    if ('serviceWorker' in navigator) {
+      const registrations = await navigator.serviceWorker.getRegistrations();
+      await Promise.all(registrations.map(reg => reg.unregister()));
+      console.log("✅ Service Workers unregistered");
+    }
+    
+    console.log("✅ All caches cleared! Reloading...");
+    setTimeout(() => location.reload(true), 500);
+  } catch (error) {
+    console.error("Error clearing caches:", error);
+  }
+};
+
 /*********************
  * UTILITY FUNCTIONS
  *********************/
