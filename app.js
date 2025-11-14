@@ -37,6 +37,7 @@ const ADMIN_EMAILS = [
 let currentUser = null;
 let showAllSignups = false; // Admin toggle state - default to show upcoming only
 let userPreferences = null; // User's sport preferences
+let deepLinkHandled = false; // Track if deep link has been handled
 
 // Global function to clear all caches (can be called from console)
 window.clearAllCaches = async function() {
@@ -226,6 +227,8 @@ auth.onAuthStateChanged(u => {
     if (filtersSection) filtersSection.style.display = "flex";
     loadUserPreferences(); // Load preferences
     subscribeSchedule();
+    // Handle deep link after login (in case user clicked link before logging in)
+    setTimeout(() => handleDeepLink(), 500);
   } else {
     // User not logged in - hide legend, filters and clear the schedule
     if (legend) legend.style.display = "none";
@@ -469,6 +472,9 @@ function subscribeSchedule() {
 
       renderTabs(sports);
       renderTabContent();
+      
+      // Handle deep link after content is rendered
+      handleDeepLink();
     }, err => {
       console.error(err);
       tabContent.innerHTML = `<div class="empty">Failed to load schedule.</div>`;
@@ -703,6 +709,8 @@ function renderSlotCard(slot, prio) {
 
   const card = document.createElement("div");
   card.className = `slot-card${active ? " active" : ""}`;
+  card.setAttribute("data-slot-id", slot.id);
+  card.setAttribute("data-prio", prio);
 
   const maxPlayers = meta.max ? meta.max : 20;
   const canAddGuest = currentUser && p.sport !== "No Games" && (p.players || []).length < maxPlayers;
@@ -714,16 +722,31 @@ function renderSlotCard(slot, prio) {
     <span class="priority-pill ${prio === 0 ? "p0" : "p1"}">${prio === 0 ? "P0" : "P1"}</span>
   `;
   
-  // Add guest button next to priority pill
+  // Add guest button and share button next to priority pill
+  const buttonContainer = document.createElement("div");
+  buttonContainer.style.display = "flex";
+  buttonContainer.style.gap = "4px";
+  buttonContainer.style.alignItems = "center";
+  
+  // Share button (always visible)
+  const shareBtn = document.createElement("button");
+  shareBtn.className = "btn share-btn-top";
+  shareBtn.innerHTML = "📤";
+  shareBtn.title = "Share on WhatsApp";
+  shareBtn.onclick = () => shareSlotOnWhatsApp(slot, prio, p, block);
+  buttonContainer.appendChild(shareBtn);
+  
+  // Guest button (conditional)
   if (canAddGuest) {
     const addGuestBtn = document.createElement("button");
     addGuestBtn.className = "btn guest-btn-top";
     addGuestBtn.innerHTML = "👥";
     addGuestBtn.title = "Add Guest";
     addGuestBtn.onclick = () => showGuestModal(slot.id, prio);
-    top.appendChild(addGuestBtn);
+    buttonContainer.appendChild(addGuestBtn);
   }
   
+  top.appendChild(buttonContainer);
   card.appendChild(top);
 
   const sportTag = document.createElement("div");
@@ -1155,6 +1178,85 @@ const dayDate = `${date.toString()}`;
     });
   });
   await batch.commit();
+}
+
+/*********************
+ * SHARE FUNCTIONALITY
+ *********************/
+function shareSlotOnWhatsApp(slot, prio, p, block) {
+  const dayName = DAYS[slot.dayIndex];
+  const dateLabel = getDateLabel(slot.dayIndex);
+  const timeLabel = block?.label ?? slot.blockId;
+  const sport = p.sport;
+  const totalPlayers = (p.players || []).length;
+  const maxPlayers = (SPORT_META[sport] || { max: 20 }).max;
+  
+  // Create deep link URL
+  const baseUrl = window.location.origin + window.location.pathname;
+  const deepLink = `${baseUrl}?slotId=${encodeURIComponent(slot.id)}&prio=${prio}`;
+  
+  // Create share message
+  // Add space before URL to help WhatsApp Web recognize it as clickable
+  const message = `🏸 *${sport}* - ${dayName}, ${dateLabel}\n` +
+    `⏰ ${timeLabel}\n` +
+    `👥 ${totalPlayers} players joined\n` +
+    `\nJoin this game:\n \n${deepLink}`;
+  
+  // WhatsApp share URL
+  const whatsappUrl = `https://wa.me/?text=${encodeURIComponent(message)}`;
+  
+  // Open WhatsApp in new window
+  window.open(whatsappUrl, '_blank');
+}
+
+function handleDeepLink() {
+  // Only handle deep link once per page load
+  if (deepLinkHandled) return;
+  
+  const urlParams = new URLSearchParams(window.location.search);
+  const slotId = urlParams.get('slotId');
+  const prio = urlParams.get('prio');
+  
+  if (!slotId || prio === null) return;
+  
+  deepLinkHandled = true; // Mark as handled
+  
+  // Wait for slots to load, then navigate
+  const checkAndNavigate = () => {
+    if (latestSlots.length === 0) {
+      setTimeout(checkAndNavigate, 100);
+      return;
+    }
+    
+    const slot = latestSlots.find(s => s.id === slotId);
+    if (!slot) return;
+    
+    const priority = parseInt(prio);
+    const sport = slot[`p${priority}`]?.sport;
+    if (!sport || sport === "No Games") return;
+    
+    // Navigate to the sport tab
+    selectedSport = sport;
+    renderTabContent();
+    
+    // Scroll to the slot after a short delay to allow rendering
+    setTimeout(() => {
+      const slotCard = document.querySelector(`[data-slot-id="${slotId}"][data-prio="${priority}"]`);
+      if (slotCard) {
+        slotCard.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        // Highlight the card briefly
+        slotCard.style.boxShadow = '0 0 0 4px rgba(59, 130, 246, 0.5)';
+        setTimeout(() => {
+          slotCard.style.boxShadow = '';
+        }, 2000);
+      }
+    }, 300);
+    
+    // Clean up URL
+    window.history.replaceState({}, document.title, window.location.pathname);
+  };
+  
+  checkAndNavigate();
 }
 
 async function backupAndResetWeekly() {
