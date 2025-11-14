@@ -1206,7 +1206,7 @@ function shareSlotOnWhatsApp(slot, prio, p, block) {
   const whatsappUrl = `https://wa.me/?text=${encodeURIComponent(message)}`;
   
   // Open WhatsApp in new window
-  window.open(whatsappUrl, '_blank');
+  window.open(whatsappUrl, '_self');
 }
 
 function handleDeepLink() {
