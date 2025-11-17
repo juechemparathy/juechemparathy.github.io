@@ -1,7 +1,8 @@
-const CACHE_NAME = 'smash-signup-v2'; // Increment version on each deployment
+const CACHE_NAME = 'smash-signup-v4'; // Increment version on each deployment
 const urlsToCache = [
   '/',
   '/index.html',
+  '/patrons.html',
   '/style.css',
   '/app.js',
   '/firebase-config.js',
