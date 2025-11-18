@@ -23,7 +23,7 @@
     <link rel="apple-touch-icon" href="icons/smash-logo.png">
 
     <title>SMASH Game Sign Up</title>
-    <link rel="stylesheet" href="style.css?v=4" />
+    <link rel="stylesheet" href="style.css?v=5" />
 
     <!-- Firebase SDKs (Compat builds for simple <script> use) -->
     <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
@@ -39,10 +39,7 @@
         SMASH Game SignUp
     </h1>
     <div style="display: flex; align-items: center; gap: 12px;">
-        <a href="patrons.html" class="patrons-link" title="Thank you to our Patrons">
-            <span class="heart-icon">❤️</span>
-            <span class="patrons-text">Our Patrons</span>
-        </a>
+        <div id="patronsBox"></div>
         <div id="userBox"></div>
     </div>
 </header>
@@ -122,10 +119,10 @@
 </div>
 
 <!-- Your Firebase config -->
-<script src="firebase-config.js?v=3"></script>
+<script src="firebase-config.js?v=5"></script>
 
 <!-- App logic -->
-<script src="app.js?v=3"></script>
+<script src="app.js?v=5"></script>
 
 <!-- Service Worker Registration for PWA -->
 <script>
