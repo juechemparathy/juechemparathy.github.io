@@ -38,6 +38,7 @@ let currentUser = null;
 let showAllSignups = false; // Admin toggle state - default to show upcoming only
 let userPreferences = null; // User's sport preferences
 let deepLinkHandled = false; // Track if deep link has been handled
+let initialTabSet = false; // Track if initial tab has been determined
 
 // Global function to clear all caches (can be called from console)
 window.clearAllCaches = async function() {
@@ -132,9 +133,20 @@ document.addEventListener("DOMContentLoaded", initializeFilters);
  * AUTH UI
  *********************/
 const userBox = document.getElementById("userBox");
+const patronsBox = document.getElementById("patronsBox");
+
 function renderUser() {
   if (currentUser) {
     const isAdmin = ADMIN_EMAILS.includes(currentUser.email);
+    
+    // Show Patrons button to all logged-in users
+    patronsBox.innerHTML = `
+      <a href="patrons.html" class="patrons-link" title="Thank you to our Patrons">
+        <span class="heart-icon">❤️</span>
+        <span class="patrons-text">Our Patrons</span>
+      </a>
+    `;
+    
     userBox.innerHTML = `
       <div class="user-menu">
         <button id="userMenuBtn" class="user-menu-btn">
@@ -180,6 +192,9 @@ function renderUser() {
       }
     });
   } else {
+    // Hide patrons button when not logged in
+    patronsBox.innerHTML = "";
+    
     userBox.innerHTML = `<button id="loginBtn">Sign in with Google</button>`;
     document.getElementById("loginBtn").onclick = () => {
       const provider = new firebase.auth.GoogleAuthProvider();
@@ -217,6 +232,9 @@ function toggleViewMode() {
 auth.onAuthStateChanged(u => {
   currentUser = u;
   renderUser();
+  
+  // Reset initial tab flag on auth change to allow smart selection
+  initialTabSet = false;
   
   const legend = document.querySelector(".legend");
   const filtersSection = document.getElementById("filtersSection");
@@ -466,7 +484,23 @@ function subscribeSchedule() {
       console.log("Sports after preference filter:", Array.from(sportSet));
 
       const sports = [MY_GAMES_TAB, ALL_GAMES_TAB, ...Array.from(sportSet).sort()];
-      if (!selectedSport || !sports.includes(selectedSport)) {
+      
+      // Smart initial tab selection (only on first load)
+      if (!initialTabSet && currentUser) {
+        // Check if user has joined any games
+        const userHasGames = latestSlots.some(slot => {
+          const p0Players = slot.p0?.players || [];
+          const p1Players = slot.p1?.players || [];
+          return p0Players.some(p => p.uid === currentUser.uid) || 
+                 p1Players.some(p => p.uid === currentUser.uid);
+        });
+        
+        // Default to "My Games" if user has games, otherwise "All Games"
+        selectedSport = userHasGames ? MY_GAMES_TAB : ALL_GAMES_TAB;
+        initialTabSet = true;
+        console.log(`Smart tab selection: ${selectedSport} (user has games: ${userHasGames})`);
+      } else if (!selectedSport || !sports.includes(selectedSport)) {
+        // Fallback if sport is invalid
         selectedSport = sports[0] || MY_GAMES_TAB;
       }
 
