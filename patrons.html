@@ -207,57 +207,52 @@
     </div>
     
     <script>
-        // Patron names from CSV (sorted alphabetically)
-        const patrons = [
-            "Abraham Palaty",
-            "Aingel Xavier Muttamthottil",
-            "Ajay Mathews Baby",
-            "Antony Jesto",
-            "Arun Joseph George",
-            "Biju Mathew",
-            "Binoy Baby",
-            "Binu K Jose",
-            "Don Mathews Mani",
-            "Geen George",
-            "Geoffrey G Chemmannoor",
-            "Ginu K Paul",
-            "Jaino Joseph",
-            "Jenson Thomas",
-            "Jins George",
-            "Jobin Mathew",
-            "Jue George Chemparathy",
-            "Kevin Bastin",
-            "Kiran Joseph",
-            "Nivin Lawrence",
-            "Polin Anthony Kooran",
-            "Praveen George",
-            "Rony Kudakkachira Jose",
-            "Subhash Scaria",
-            "Sunny George",
-            "Trini George"
-        ];
-        
         // Lightning icon for all patrons
         const heartIcon = '⚡';
         
-        // Render patrons
-        const grid = document.getElementById('patronsGrid');
-        patrons.forEach((name, index) => {
-            const card = document.createElement('div');
-            card.className = 'patron-card';
+        // Fetch and display patrons from CSV file
+        async function loadPatrons() {
+            const grid = document.getElementById('patronsGrid');
             
-            const icon = document.createElement('div');
-            icon.className = 'patron-icon';
-            icon.textContent = heartIcon;
-            
-            const nameDiv = document.createElement('div');
-            nameDiv.className = 'patron-name';
-            nameDiv.textContent = name;
-            
-            card.appendChild(icon);
-            card.appendChild(nameDiv);
-            grid.appendChild(card);
-        });
+            try {
+                // Fetch the CSV file
+                const response = await fetch('patron.csv');
+                const csvText = await response.text();
+                
+                // Parse CSV and filter empty lines
+                const patrons = csvText
+                    .split('\n')
+                    .map(line => line.trim())
+                    .filter(line => line.length > 0)
+                    .sort((a, b) => a.localeCompare(b)); // Sort alphabetically
+                
+                console.log(`Loaded ${patrons.length} patrons from CSV`);
+                
+                // Render patron cards
+                patrons.forEach((name, index) => {
+                    const card = document.createElement('div');
+                    card.className = 'patron-card';
+                    
+                    const icon = document.createElement('div');
+                    icon.className = 'patron-icon';
+                    icon.textContent = heartIcon;
+                    
+                    const nameDiv = document.createElement('div');
+                    nameDiv.className = 'patron-name';
+                    nameDiv.textContent = name;
+                    
+                    card.appendChild(icon);
+                    card.appendChild(nameDiv);
+                    grid.appendChild(card);
+                });
+            } catch (error) {
+                console.error('Error loading patrons:', error);
+                grid.innerHTML = '<p style="color: #ef4444;">Error loading patrons list. Please refresh the page.</p>';
+            }
+        }
+        
+        // Load patrons when page loads
+        loadPatrons();
     </script>
 </body>
 </html>
