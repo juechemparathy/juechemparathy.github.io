@@ -40,6 +40,7 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git pull --rebase
           if git status --short backups | grep -q .; then
             git add backups
             git commit -m "chore: backup $(date -u +'%Y-%m-%dT%H:%M:%SZ')"
