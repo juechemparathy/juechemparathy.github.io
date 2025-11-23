@@ -1,5 +1,9 @@
 name: Weekly Firestore Backup
 
+
+permissions:
+  contents: write
+
 on:
   workflow_dispatch:
     inputs:
