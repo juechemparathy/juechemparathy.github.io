@@ -118,6 +118,20 @@
     </div>
 </div>
 
+<!-- Block Days Modal (Admin Only) -->
+<div id="blockDaysModal" class="modal">
+    <div class="modal-content" style="max-width: 700px; max-height: 80vh; overflow-y: auto;">
+        <span class="modal-close" onclick="closeBlockDaysModal()">&times;</span>
+        <h2>Block Days & Time Slots</h2>
+        <p style="color:#6b7280;font-size:14px;margin-bottom:16px;">Block entire days or individual time slots. Provide a reason for each block.</p>
+        <div id="dayCheckboxes" class="day-checkboxes"></div>
+        <div class="form-actions">
+            <button type="button" class="btn" onclick="closeBlockDaysModal()">Cancel</button>
+            <button type="button" class="btn primary" onclick="saveBlockedDays()">Save All</button>
+        </div>
+    </div>
+</div>
+
 <!-- Your Firebase config -->
 <script src="firebase-config.js?v=6"></script>
 
