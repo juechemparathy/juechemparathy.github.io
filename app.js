@@ -39,6 +39,8 @@ let showAllSignups = false; // Admin toggle state - default to show upcoming onl
 let userPreferences = null; // User's sport preferences
 let deepLinkHandled = false; // Track if deep link has been handled
 let initialTabSet = false; // Track if initial tab has been determined
+let blockedDays = {}; // Store blocked days: { dayIndex: { note: "reason", blockedAt: timestamp } }
+let blockedSlots = {}; // Store blocked slots: { slotId_prio: { note: "reason", blockedAt: timestamp } }
 
 // Global function to clear all caches (can be called from console)
 window.clearAllCaches = async function() {
@@ -158,8 +160,15 @@ function renderUser() {
             <span>⚙️</span> Sport Preferences
           </button>
           ${isAdmin ? `
+            <div class="dropdown-divider"></div>
+            <a class="dropdown-item admin-item" href="ledger.html" style="display: flex; align-items: center; gap: 8px; text-decoration: none; color: inherit;">
+              <span>💰</span> Financial Ledger
+            </a>
             <button class="dropdown-item" onclick="toggleViewMode()">
               <span>${showAllSignups ? '📅' : '📋'}</span> ${showAllSignups ? 'Upcoming Only' : 'All Sign-ups'}
+            </button>
+            <button class="dropdown-item admin-item" onclick="openBlockDaysModal()">
+              <span>🚫</span> Block Days
             </button>
             <div class="dropdown-divider"></div>
             <button class="dropdown-item admin-item" onclick="seedWeeklyIfEmpty()">
@@ -244,6 +253,8 @@ auth.onAuthStateChanged(u => {
     if (legend) legend.style.display = "flex";
     if (filtersSection) filtersSection.style.display = "flex";
     loadUserPreferences(); // Load preferences
+    subscribeBlockedDays(); // Load blocked days
+    subscribeBlockedSlots(); // Load blocked slots
     subscribeSchedule();
     // Handle deep link after login (in case user clicked link before logging in)
     setTimeout(() => handleDeepLink(), 500);
@@ -252,7 +263,11 @@ auth.onAuthStateChanged(u => {
     if (legend) legend.style.display = "none";
     if (filtersSection) filtersSection.style.display = "none";
     if (unsubscribe) unsubscribe();
+    if (unsubscribeBlockedDays) unsubscribeBlockedDays();
+    if (unsubscribeBlockedSlots) unsubscribeBlockedSlots();
     userPreferences = null;
+    blockedDays = {};
+    blockedSlots = {};
     tabs.innerHTML = "";
     tabContent.innerHTML = `
       <div class="title-bar" style="text-align: center; padding: 40px;">
@@ -420,6 +435,368 @@ function shouldShowSport(sport) {
 }
 
 /*********************
+ * BLOCKED DAYS MANAGEMENT
+ *********************/
+function subscribeBlockedDays() {
+  if (unsubscribeBlockedDays) unsubscribeBlockedDays();
+  
+  unsubscribeBlockedDays = db.collection("blockedDays")
+    .onSnapshot(snap => {
+      blockedDays = {};
+      snap.forEach(doc => {
+        const data = doc.data();
+        blockedDays[data.dayIndex] = {
+          note: data.note,
+          blockedAt: data.blockedAt,
+          blockedBy: data.blockedBy
+        };
+      });
+      console.log("Blocked days loaded:", blockedDays);
+      // Re-render content to show blocked days
+      if (latestSlots.length > 0) {
+        renderTabContent();
+      }
+    }, err => {
+      console.error("Error loading blocked days:", err);
+    });
+}
+
+function isDayBlocked(dayIndex) {
+  return blockedDays.hasOwnProperty(dayIndex);
+}
+
+function subscribeBlockedSlots() {
+  if (unsubscribeBlockedSlots) unsubscribeBlockedSlots();
+  
+  unsubscribeBlockedSlots = db.collection("blockedSlots")
+    .onSnapshot(snap => {
+      blockedSlots = {};
+      snap.forEach(doc => {
+        const data = doc.data();
+        const key = `${data.slotId}_${data.prio}`;
+        blockedSlots[key] = {
+          note: data.note,
+          blockedAt: data.blockedAt,
+          blockedBy: data.blockedBy
+        };
+      });
+      console.log("Blocked slots loaded:", blockedSlots);
+      // Re-render content to show blocked slots
+      if (latestSlots.length > 0) {
+        renderTabContent();
+      }
+    }, err => {
+      console.error("Error loading blocked slots:", err);
+    });
+}
+
+function isSlotBlocked(slotId, prio) {
+  const key = `${slotId}_${prio}`;
+  return blockedSlots.hasOwnProperty(key);
+}
+
+async function toggleBlockSlot(slotId, prio, slot, p, block) {
+  if (!currentUser || !ADMIN_EMAILS.includes(currentUser.email)) {
+    return alert("Admins only.");
+  }
+  
+  const key = `${slotId}_${prio}`;
+  const docRef = db.collection("blockedSlots").doc(key);
+  
+  try {
+    if (block) {
+      // Block the slot - prompt for reason
+      const note = prompt(`Block this ${p.sport} slot?\nEnter reason (e.g., "Maintenance", "Special Event"):`);
+      if (!note || !note.trim()) {
+        return; // User cancelled or entered empty note
+      }
+      
+      await docRef.set({
+        slotId: slotId,
+        prio: prio,
+        dayIndex: slot.dayIndex,
+        dayName: DAYS[slot.dayIndex],
+        blockId: slot.blockId,
+        sport: p.sport,
+        note: note.trim(),
+        blockedAt: firebase.firestore.FieldValue.serverTimestamp(),
+        blockedBy: currentUser.email
+      });
+      
+      console.log(`Blocked slot: ${key}`);
+    } else {
+      // Unblock the slot
+      if (confirm(`Unblock this ${p.sport} slot?`)) {
+        await docRef.delete();
+        console.log(`Unblocked slot: ${key}`);
+      }
+    }
+  } catch (error) {
+    console.error("Error toggling block slot:", error);
+    alert("❌ Failed to update: " + error.message);
+  }
+}
+
+function openBlockDaysModal() {
+  const modal = document.getElementById("blockDaysModal");
+  const checkboxContainer = document.getElementById("dayCheckboxes");
+  
+  // Close dropdown
+  const dropdown = document.getElementById("userDropdown");
+  if (dropdown) dropdown.classList.remove("show");
+  
+  // Build controls for each day
+  checkboxContainer.innerHTML = "";
+  DAYS.forEach((day, dayIndex) => {
+    const isBlocked = isDayBlocked(dayIndex);
+    const blockInfo = blockedDays[dayIndex];
+    
+    // Day container
+    const dayContainer = document.createElement("div");
+    dayContainer.className = "day-block-container";
+    
+    // Day header with checkbox and note
+    const dayHeader = document.createElement("div");
+    dayHeader.className = "day-checkbox-item";
+    
+    const checkbox = document.createElement("input");
+    checkbox.type = "checkbox";
+    checkbox.name = "day";
+    checkbox.value = dayIndex;
+    checkbox.checked = isBlocked;
+    checkbox.id = `day_${dayIndex}`;
+    
+    const label = document.createElement("label");
+    label.htmlFor = `day_${dayIndex}`;
+    label.textContent = day;
+    label.style.fontWeight = "600";
+    label.style.cursor = "pointer";
+    label.style.flex = "1";
+    
+    const noteInput = document.createElement("input");
+    noteInput.type = "text";
+    noteInput.placeholder = "Reason (e.g., Christmas break)";
+    noteInput.value = blockInfo?.note || "";
+    noteInput.id = `note_${dayIndex}`;
+    noteInput.disabled = !isBlocked;
+    noteInput.style.flex = "2";
+    noteInput.style.padding = "6px 10px";
+    noteInput.style.border = "1px solid var(--border)";
+    noteInput.style.borderRadius = "6px";
+    noteInput.style.fontSize = "13px";
+    
+    // Enable/disable note input based on checkbox
+    checkbox.addEventListener("change", () => {
+      noteInput.disabled = !checkbox.checked;
+      if (checkbox.checked) {
+        noteInput.focus();
+      }
+    });
+    
+    dayHeader.appendChild(checkbox);
+    dayHeader.appendChild(label);
+    dayHeader.appendChild(noteInput);
+    dayContainer.appendChild(dayHeader);
+    
+    // Time slots section
+    const slotsSection = document.createElement("div");
+    slotsSection.className = "time-slots-section";
+    slotsSection.id = `slots_${dayIndex}`;
+    
+    // Get all slots for this day
+    const daySlots = latestSlots.filter(slot => slot.dayIndex === dayIndex);
+    
+    if (daySlots.length > 0) {
+      const slotsTitle = document.createElement("div");
+      slotsTitle.className = "slots-title";
+      slotsTitle.textContent = "Time Slots:";
+      slotsSection.appendChild(slotsTitle);
+      
+      // Sort slots by time block order
+      daySlots.sort((a, b) => {
+        const orderA = TIME_BLOCKS.findIndex(t => t.id === a.blockId);
+        const orderB = TIME_BLOCKS.findIndex(t => t.id === b.blockId);
+        return orderA - orderB;
+      });
+      
+      daySlots.forEach(slot => {
+        const block = TIME_BLOCKS.find(b => b.id === slot.blockId);
+        
+        // Create slot items for P0 and P1
+        [0, 1].forEach(prio => {
+          const p = slot[`p${prio}`];
+          if (!p || !p.sport || p.sport === "No Games") return;
+          
+          const slotKey = `${slot.id}_${prio}`;
+          const isSlotBlockedNow = isSlotBlocked(slot.id, prio);
+          const slotBlockInfo = blockedSlots[slotKey];
+          
+          const slotItem = document.createElement("div");
+          slotItem.className = "slot-block-item";
+          
+          const slotCheckbox = document.createElement("input");
+          slotCheckbox.type = "checkbox";
+          slotCheckbox.checked = isSlotBlockedNow;
+          slotCheckbox.id = `slot_${slotKey}`;
+          slotCheckbox.dataset.slotId = slot.id;
+          slotCheckbox.dataset.prio = prio;
+          
+          const slotLabel = document.createElement("label");
+          slotLabel.htmlFor = `slot_${slotKey}`;
+          slotLabel.innerHTML = `<span class="time-label">${block?.label || slot.blockId}</span> <span class="priority-badge ${prio === 0 ? 'p0' : 'p1'}">${prio === 0 ? 'P0' : 'P1'}</span> <span class="sport-label">${p.sport}</span>`;
+          slotLabel.style.cursor = "pointer";
+          slotLabel.style.flex = "1";
+          
+          const slotNoteInput = document.createElement("input");
+          slotNoteInput.type = "text";
+          slotNoteInput.placeholder = "Reason";
+          slotNoteInput.value = slotBlockInfo?.note || "";
+          slotNoteInput.id = `slotnote_${slotKey}`;
+          slotNoteInput.disabled = !isSlotBlockedNow;
+          slotNoteInput.style.flex = "1.5";
+          slotNoteInput.style.padding = "4px 8px";
+          slotNoteInput.style.border = "1px solid var(--border)";
+          slotNoteInput.style.borderRadius = "4px";
+          slotNoteInput.style.fontSize = "12px";
+          
+          slotCheckbox.addEventListener("change", () => {
+            slotNoteInput.disabled = !slotCheckbox.checked;
+            if (slotCheckbox.checked) {
+              slotNoteInput.focus();
+            }
+          });
+          
+          slotItem.appendChild(slotCheckbox);
+          slotItem.appendChild(slotLabel);
+          slotItem.appendChild(slotNoteInput);
+          slotsSection.appendChild(slotItem);
+        });
+      });
+    }
+    
+    dayContainer.appendChild(slotsSection);
+    checkboxContainer.appendChild(dayContainer);
+  });
+  
+  modal.style.display = "flex";
+}
+
+function closeBlockDaysModal() {
+  document.getElementById("blockDaysModal").style.display = "none";
+}
+
+async function saveBlockedDays() {
+  if (!currentUser || !ADMIN_EMAILS.includes(currentUser.email)) {
+    return alert("Admins only.");
+  }
+  
+  try {
+    const batch = db.batch();
+    const blockedDaysRef = db.collection("blockedDays");
+    const blockedSlotsRef = db.collection("blockedSlots");
+    
+    // Get all current blocked days to clear removed ones
+    const currentDaysSnapshot = await blockedDaysRef.get();
+    const currentDayIndexes = new Set();
+    currentDaysSnapshot.forEach(doc => {
+      currentDayIndexes.add(doc.data().dayIndex);
+    });
+    
+    // Get all current blocked slots to clear removed ones
+    const currentSlotsSnapshot = await blockedSlotsRef.get();
+    const currentSlotKeys = new Set();
+    currentSlotsSnapshot.forEach(doc => {
+      currentSlotKeys.add(doc.id);
+    });
+    
+    // Process each day checkbox
+    const newBlockedDays = new Set();
+    DAYS.forEach((day, dayIndex) => {
+      const checkbox = document.getElementById(`day_${dayIndex}`);
+      const noteInput = document.getElementById(`note_${dayIndex}`);
+      
+      if (checkbox && checkbox.checked) {
+        const note = noteInput ? noteInput.value.trim() : "";
+        if (!note) {
+          throw new Error(`Please provide a reason for blocking ${day}`);
+        }
+        
+        newBlockedDays.add(dayIndex);
+        const docRef = blockedDaysRef.doc(`day_${dayIndex}`);
+        batch.set(docRef, {
+          dayIndex: dayIndex,
+          dayName: day,
+          note: note,
+          blockedAt: firebase.firestore.FieldValue.serverTimestamp(),
+          blockedBy: currentUser.email
+        });
+      }
+    });
+    
+    // Delete days that were unblocked
+    currentDayIndexes.forEach(dayIndex => {
+      if (!newBlockedDays.has(dayIndex)) {
+        const docRef = blockedDaysRef.doc(`day_${dayIndex}`);
+        batch.delete(docRef);
+      }
+    });
+    
+    // Process slot checkboxes
+    const newBlockedSlots = new Set();
+    document.querySelectorAll('[id^="slot_"]').forEach(slotCheckbox => {
+      if (!slotCheckbox.dataset.slotId) return;
+      
+      const slotId = slotCheckbox.dataset.slotId;
+      const prio = parseInt(slotCheckbox.dataset.prio);
+      const slotKey = `${slotId}_${prio}`;
+      const noteInput = document.getElementById(`slotnote_${slotKey}`);
+      
+      if (slotCheckbox.checked) {
+        const note = noteInput ? noteInput.value.trim() : "";
+        if (!note) {
+          throw new Error(`Please provide a reason for blocking the slot`);
+        }
+        
+        newBlockedSlots.add(slotKey);
+        
+        // Find the slot data
+        const slot = latestSlots.find(s => s.id === slotId);
+        if (slot) {
+          const p = slot[`p${prio}`];
+          const docRef = blockedSlotsRef.doc(slotKey);
+          batch.set(docRef, {
+            slotId: slotId,
+            prio: prio,
+            dayIndex: slot.dayIndex,
+            dayName: DAYS[slot.dayIndex],
+            blockId: slot.blockId,
+            sport: p?.sport || "",
+            note: note,
+            blockedAt: firebase.firestore.FieldValue.serverTimestamp(),
+            blockedBy: currentUser.email
+          });
+        }
+      }
+    });
+    
+    // Delete slots that were unblocked
+    currentSlotKeys.forEach(slotKey => {
+      if (!newBlockedSlots.has(slotKey)) {
+        const docRef = blockedSlotsRef.doc(slotKey);
+        batch.delete(docRef);
+      }
+    });
+    
+    await batch.commit();
+    closeBlockDaysModal();
+    alert("✅ Blocks updated successfully!");
+  } catch (error) {
+    console.error("Error saving blocks:", error);
+    alert("❌ Failed to save: " + error.message);
+  }
+}
+
+/*********************
  * ACTIVE PRIORITY LOGIC
  * P0 is active unless (now >= cutoff AND P0 players < min) → then P1 is active
  *********************/
@@ -447,6 +824,8 @@ const ALL_GAMES_TAB = "All Games";
 const tabs = document.getElementById("sportTabs");
 const tabContent = document.getElementById("tabContent");
 let unsubscribe = null;
+let unsubscribeBlockedDays = null;
+let unsubscribeBlockedSlots = null;
 let selectedSport = null;
 let latestSlots = [];
 
@@ -569,11 +948,22 @@ function renderSportContent() {
 
     const daySection = document.createElement("section");
     daySection.className = `day-section${dayIndex === todayIndex ? " today" : ""}`;
+    if (isDayBlocked(dayIndex)) {
+      daySection.classList.add("blocked");
+    }
 
     const header = document.createElement("div");
     header.className = "day-header";
     header.innerHTML = `<span>${day}</span><span class="date">${getDateLabel(dayIndex)}</span>`;
     daySection.appendChild(header);
+    
+    // Show blocked day notice if day is blocked
+    if (isDayBlocked(dayIndex)) {
+      const blockNotice = document.createElement("div");
+      blockNotice.className = "block-notice";
+      blockNotice.innerHTML = `<span class="block-icon">🚫</span><span class="block-text">${blockedDays[dayIndex].note}</span>`;
+      daySection.appendChild(blockNotice);
+    }
 
     const matching = latestSlots
       .filter(slot => slot.dayIndex === dayIndex)
@@ -594,19 +984,23 @@ function renderSportContent() {
         return orderA - orderB || a.prio - b.prio;
       });
 
-    const track = document.createElement("div");
-    track.className = "slot-track";
+    // Don't show slots if the entire day is blocked
+    if (!isDayBlocked(dayIndex)) {
+      const track = document.createElement("div");
+      track.className = "slot-track";
 
-    if (matching.length === 0) {
-      const empty = document.createElement("div");
-      empty.className = "empty";
-      empty.textContent = `No ${selectedSport} games.`;
-      track.appendChild(empty);
-    } else {
-      matching.forEach(entry => track.appendChild(renderSlotCard(entry.slot, entry.prio)));
+      if (matching.length === 0) {
+        const empty = document.createElement("div");
+        empty.className = "empty";
+        empty.textContent = `No ${selectedSport} games.`;
+        track.appendChild(empty);
+      } else {
+        matching.forEach(entry => track.appendChild(renderSlotCard(entry.slot, entry.prio)));
+      }
+
+      daySection.appendChild(track);
     }
-
-    daySection.appendChild(track);
+    
     tabContent.appendChild(daySection);
   });
 }
@@ -656,17 +1050,32 @@ function renderMyGamesContent() {
     renderedDays += 1;
     const daySection = document.createElement("section");
     daySection.className = `day-section${dayIndex === todayIndex ? " today" : ""}`;
+    if (isDayBlocked(dayIndex)) {
+      daySection.classList.add("blocked");
+    }
 
     const header = document.createElement("div");
     header.className = "day-header";
     header.innerHTML = `<span>${day}</span><span class="date">${getDateLabel(dayIndex)}</span>`;
     daySection.appendChild(header);
+    
+    // Show blocked day notice if day is blocked
+    if (isDayBlocked(dayIndex)) {
+      const blockNotice = document.createElement("div");
+      blockNotice.className = "block-notice";
+      blockNotice.innerHTML = `<span class="block-icon">🚫</span><span class="block-text">${blockedDays[dayIndex].note}</span>`;
+      daySection.appendChild(blockNotice);
+    }
 
-    const track = document.createElement("div");
-    track.className = "slot-track";
-    entries.forEach(entry => track.appendChild(renderSlotCard(entry.slot, entry.prio)));
+    // Don't show slots if the entire day is blocked
+    if (!isDayBlocked(dayIndex)) {
+      const track = document.createElement("div");
+      track.className = "slot-track";
+      entries.forEach(entry => track.appendChild(renderSlotCard(entry.slot, entry.prio)));
 
-    daySection.appendChild(track);
+      daySection.appendChild(track);
+    }
+    
     tabContent.appendChild(daySection);
   });
 
@@ -711,17 +1120,32 @@ function renderAllGamesContent() {
     renderedDays += 1;
     const daySection = document.createElement("section");
     daySection.className = `day-section${dayIndex === todayIndex ? " today" : ""}`;
+    if (isDayBlocked(dayIndex)) {
+      daySection.classList.add("blocked");
+    }
 
     const header = document.createElement("div");
     header.className = "day-header";
     header.innerHTML = `<span>${day}</span><span class="date">${getDateLabel(dayIndex)}</span>`;
     daySection.appendChild(header);
+    
+    // Show blocked day notice if day is blocked
+    if (isDayBlocked(dayIndex)) {
+      const blockNotice = document.createElement("div");
+      blockNotice.className = "block-notice";
+      blockNotice.innerHTML = `<span class="block-icon">🚫</span><span class="block-text">${blockedDays[dayIndex].note}</span>`;
+      daySection.appendChild(blockNotice);
+    }
 
-    const track = document.createElement("div");
-    track.className = "slot-track";
-    entries.forEach(entry => track.appendChild(renderSlotCard(entry.slot, entry.prio)));
+    // Don't show slots if the entire day is blocked
+    if (!isDayBlocked(dayIndex)) {
+      const track = document.createElement("div");
+      track.className = "slot-track";
+      entries.forEach(entry => track.appendChild(renderSlotCard(entry.slot, entry.prio)));
 
-    daySection.appendChild(track);
+      daySection.appendChild(track);
+    }
+    
     tabContent.appendChild(daySection);
   });
 
@@ -735,6 +1159,9 @@ function renderSlotCard(slot, prio) {
   const meta = SPORT_META[p.sport] || { min: 0, max: 20, mainLimit: 10, waitingList: 10 };
   const block = TIME_BLOCKS.find(b => b.id === slot.blockId);
   const active = computeActivePriority(slot) === prio;
+  const dayBlocked = isDayBlocked(slot.dayIndex);
+  const slotBlocked = isSlotBlocked(slot.id, prio);
+  const isAdmin = currentUser && ADMIN_EMAILS.includes(currentUser.email);
 
   const mainLimit = meta.mainLimit || 10;
   const totalPlayers = (p.players || []).length;
@@ -756,7 +1183,7 @@ function renderSlotCard(slot, prio) {
     <span class="priority-pill ${prio === 0 ? "p0" : "p1"}">${prio === 0 ? "P0" : "P1"}</span>
   `;
   
-  // Add guest button and share button next to priority pill
+  // Add buttons next to priority pill
   const buttonContainer = document.createElement("div");
   buttonContainer.style.display = "flex";
   buttonContainer.style.gap = "4px";
@@ -772,8 +1199,18 @@ function renderSlotCard(slot, prio) {
   shareBtn.onclick = () => shareSlotOnWhatsApp(slot, prio, p, block);
   buttonContainer.appendChild(shareBtn);
   
+  // Block/Unblock button (admin only)
+  if (isAdmin && p.sport !== "No Games") {
+    const blockSlotBtn = document.createElement("button");
+    blockSlotBtn.className = slotBlocked ? "btn unblock-btn-top" : "btn block-btn-top";
+    blockSlotBtn.innerHTML = slotBlocked ? "✓" : "🚫";
+    blockSlotBtn.title = slotBlocked ? "Unblock this slot" : "Block this slot";
+    blockSlotBtn.onclick = () => toggleBlockSlot(slot.id, prio, slot, p, !slotBlocked);
+    buttonContainer.appendChild(blockSlotBtn);
+  }
+  
   // Guest button (conditional)
-  if (canAddGuest) {
+  if (canAddGuest && !slotBlocked) {
     const addGuestBtn = document.createElement("button");
     addGuestBtn.className = "btn guest-btn-top";
     addGuestBtn.innerHTML = "👥";
@@ -789,6 +1226,14 @@ function renderSlotCard(slot, prio) {
   sportTag.className = "sport-tag";
   sportTag.textContent = p.sport;
   card.appendChild(sportTag);
+  
+  // Show blocked slot notice if individual slot is blocked
+  if (slotBlocked) {
+    const slotBlockNotice = document.createElement("div");
+    slotBlockNotice.className = "slot-block-notice";
+    slotBlockNotice.innerHTML = `<span class="block-icon">🚫</span><span class="block-text">${blockedSlots[`${slot.id}_${prio}`].note}</span>`;
+    card.appendChild(slotBlockNotice);
+  }
 
   const metrics = document.createElement("div");
   metrics.className = "metrics";
@@ -807,7 +1252,6 @@ function renderSlotCard(slot, prio) {
 
   const playersList = document.createElement("div");
   playersList.className = "players";
-  const isAdmin = currentUser && ADMIN_EMAILS.includes(currentUser.email);
   
   if ((p.players || []).length === 0) {
     const empty = document.createElement("span");
@@ -861,21 +1305,22 @@ function renderSlotCard(slot, prio) {
   btnbar.className = "btnbar";
 
   // Always use the current metadata max value, ignore stored maxPlayers
-  const canJoin = currentUser && p.sport !== "No Games" && (p.players || []).length < maxPlayers;
+  const blocked = dayBlocked || slotBlocked;
+  const canJoin = currentUser && p.sport !== "No Games" && (p.players || []).length < maxPlayers && !blocked;
   const isIn = !!currentUser && (p.players || []).some(pl => pl.uid === currentUser.uid);
 
   const joinBtn = document.createElement("button");
   joinBtn.className = "btn primary";
   joinBtn.innerHTML = isIn ? "✓" : "➕";
-  joinBtn.title = isIn ? "Joined" : "Join";
-  joinBtn.disabled = !currentUser || isIn || !canJoin;
+  joinBtn.title = blocked ? "Slot is blocked" : (isIn ? "Joined" : "Join");
+  joinBtn.disabled = !currentUser || isIn || !canJoin || blocked;
   joinBtn.onclick = () => updateSignup(slot.id, prio, "join");
 
   const leaveBtn = document.createElement("button");
   leaveBtn.className = "btn";
   leaveBtn.innerHTML = "➖";
-  leaveBtn.title = "Leave";
-  leaveBtn.disabled = !currentUser || !isIn;
+  leaveBtn.title = blocked ? "Slot is blocked" : "Leave";
+  leaveBtn.disabled = !currentUser || !isIn || blocked;
   leaveBtn.onclick = () => updateSignup(slot.id, prio, "leave");
 
   btnbar.appendChild(joinBtn);
