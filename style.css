@@ -149,3 +149,9 @@ body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-ser
 .block-btn-top:hover{background:#dc2626;border-color:#b91c1c;transform:scale(1.05)}
 .unblock-btn-top{background:#10b981;color:#fff;border:1px solid #059669;border-radius:8px;padding:4px 8px;font-size:1rem;font-weight:600;cursor:pointer;transition:all 0.2s}
 .unblock-btn-top:hover{background:#059669;border-color:#047857;transform:scale(1.05)}
+
+/* HireConnect nav link (header) */
+.hireconnect-link{display:flex;align-items:center;gap:6px;padding:7px 14px;background:linear-gradient(135deg,#3b82f6,#1d4ed8);color:#fff;text-decoration:none;border-radius:20px;font-weight:600;font-size:0.85rem;transition:all 0.3s ease;box-shadow:0 2px 8px rgba(59,130,246,0.3);white-space:nowrap}
+.hireconnect-link:hover{transform:translateY(-2px);box-shadow:0 4px 12px rgba(59,130,246,0.5)}
+.hireconnect-text{font-size:0.82rem}
+@media(max-width:640px){.hireconnect-text{display:none}.hireconnect-link{padding:7px 10px}}

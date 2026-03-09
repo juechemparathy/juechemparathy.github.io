@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+  <meta http-equiv="Pragma" content="no-cache" />
+  <meta http-equiv="Expires" content="0" />
+  <title>HireConnect - SMASH</title>
+  <link rel="icon" type="image/x-icon" href="../icons/smash-logo.ico" />
+  <link rel="apple-touch-icon" href="../icons/smash-logo.png" />
+  <meta name="theme-color" content="#3b82f6" />
+  <meta name="description" content="HireConnect - Get help finding hiring manager contacts from your community" />
+
+  <!-- Firebase SDKs (same versions as main app) -->
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+
+  <link rel="stylesheet" href="hireconnect.css" />
+</head>
+<body>
+
+<!-- HEADER -->
+<header class="hc-topbar">
+  <a href="../index.html" class="hc-back-link">&#8592; SMASH</a>
+  <h1 class="hc-title">HireConnect</h1>
+  <div id="authArea" class="hc-auth-area"></div>
+</header>
+
+<!-- HERO MESSAGE -->
+<section class="hc-hero">
+  <div class="hc-hero-inner">
+    <p class="hc-hero-headline">Stop applying into the void. We are here to help!</p>
+    <p class="hc-hero-body">Job Seekers: Submit a job posting anonymously, and members of the Syro Malabar community can help identify the relevant hiring manager or internal contact. This helps you connect with the right people at companies you’re interested in and move beyond submitting applications blindly.</p>
+    <p class="hc-hero-body">Parishioners: If you work at the company, you can contribute by anonymously sharing hiring manager information or offering referral support, helping fellow community members increase their chances of securing an interview.</p>
+  </div>
+</section>
+
+<!-- SUBMIT BAR (accessible to all, no auth required) -->
+<section class="hc-submit-bar">
+  <div class="hc-submit-row">
+    <input
+      id="jobUrlInput"
+      type="url"
+      class="hc-input hc-url-input"
+      placeholder="Enter LinkedIn or other job posting URL"
+      autocomplete="off"
+    />
+    <input
+      id="companyInput"
+      type="text"
+      class="hc-input hc-company-input"
+      placeholder="Company name"
+      autocomplete="off"
+    />
+    <input
+      id="detailsInput"
+      type="text"
+      class="hc-input hc-details-input"
+      placeholder="Additional details (optional)"
+      autocomplete="off"
+    />
+    <button id="submitBtn" class="hc-submit-btn" onclick="submitRequest()">
+      Request Help
+    </button>
+  </div>
+  <div id="submitFeedback" class="hc-feedback" aria-live="polite"></div>
+</section>
+
+<!-- MAIN: two-column (open requests + company sidebar) -->
+<main class="hc-main">
+
+  <!-- LEFT: Open requests waiting for hiring manager info -->
+  <section class="hc-open-panel">
+    <div class="hc-panel-header">
+      <h2>Open Postings Waiting for Hiring Manager Info</h2>
+      <input
+        id="searchBox"
+        type="search"
+        class="hc-search"
+        placeholder="Search by company or URL..."
+        oninput="onSearch(this.value)"
+        autocomplete="off"
+      />
+    </div>
+    <div id="openRequestsList" class="hc-requests-list">
+      <div class="hc-empty">Loading...</div>
+    </div>
+  </section>
+
+  <!-- RIGHT: Company sidebar -->
+  <aside class="hc-sidebar">
+    <h3 class="hc-sidebar-title">Looking for Connections from Below Companies</h3>
+    <div id="companySidebar" class="hc-company-list">
+      <div class="hc-empty">—</div>
+    </div>
+  </aside>
+
+</main>
+
+<!-- RESOLVED SECTION -->
+<section class="hc-resolved-section">
+  <h2 class="hc-resolved-header">Resolved</h2>
+  <div id="resolvedList" class="hc-requests-list">
+    <div class="hc-empty">No resolved requests yet.</div>
+  </div>
+</section>
+
+<!-- Firebase config (relative path from hireconnect/ subdir) -->
+<script src="../firebase-config.js"></script>
+<!-- Feature logic -->
+<script src="hireconnect.js"></script>
+
+</body>
+</html>

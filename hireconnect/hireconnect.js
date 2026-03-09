@@ -1,0 +1,494 @@
+/* ============================================================
+   HireConnect – hireconnect.js
+   All logic for the HireConnect job-networking feature.
+   Depends on: firebase-config.js (loaded before this file)
+   ============================================================ */
+
+// ── State ────────────────────────────────────────────────────
+let currentUser       = null;
+let openRequests      = [];      // [{id, jobUrl, company, details, ...}]
+let resolvedRequests  = [];      // [{id, ...}]
+let expandedRequestId         = null;  // doc ID of expanded open row, or null
+let expandedResolvedId        = null;  // doc ID of expanded resolved row, or null
+let searchQuery               = "";
+let unsubscribeOpen     = null;
+let unsubscribeResolved = null;
+
+// ── Utilities ────────────────────────────────────────────────
+
+function escapeHtml(str) {
+  if (!str) return "";
+  return String(str)
+    .replace(/&/g,  "&amp;")
+    .replace(/</g,  "&lt;")
+    .replace(/>/g,  "&gt;")
+    .replace(/"/g,  "&quot;")
+    .replace(/'/g,  "&#039;");
+}
+
+function safeUrl(url) {
+  if (!url) return "#";
+  const trimmed = url.trim();
+  return trimmed.startsWith("http://") || trimmed.startsWith("https://")
+    ? trimmed
+    : "#";
+}
+
+function truncateUrl(url) {
+  try {
+    const u = new URL(url);
+    const path = u.pathname.length > 40
+      ? u.pathname.slice(0, 40) + "…"
+      : u.pathname;
+    return u.hostname + path;
+  } catch {
+    return url.length > 60 ? url.slice(0, 60) + "…" : url;
+  }
+}
+
+function showFeedback(msg, type) {
+  const el = document.getElementById("submitFeedback");
+  if (!el) return;
+  el.textContent = msg;
+  el.className   = "hc-feedback " + type;
+  setTimeout(() => { el.textContent = ""; el.className = "hc-feedback"; }, 5000);
+}
+const showError   = (msg) => showFeedback(msg, "error");
+const showSuccess = (msg) => showFeedback(msg, "success");
+
+// ── Auth ─────────────────────────────────────────────────────
+
+function signIn() {
+  const provider = new firebase.auth.GoogleAuthProvider();
+  auth.signInWithPopup(provider).catch((e) => showError("Login failed: " + e.message));
+}
+
+function signOut() {
+  auth.signOut().catch((e) => showError("Sign-out failed: " + e.message));
+}
+
+function renderAuthBadge() {
+  const area = document.getElementById("authArea");
+  if (!area) return;
+
+  if (currentUser) {
+    const name = escapeHtml(currentUser.displayName || currentUser.email || "User");
+    area.innerHTML = `
+      <span class="hc-auth-name" title="${name}">${name}</span>
+      <button class="hc-signout-btn" onclick="signOut()">Sign Out</button>
+    `;
+  } else {
+    area.innerHTML = `
+      <button class="hc-signin-btn" onclick="signIn()">Sign in to Help</button>
+    `;
+  }
+}
+
+// ── Firestore Subscriptions ───────────────────────────────────
+
+function subscribeOpen() {
+  if (unsubscribeOpen) unsubscribeOpen();
+
+  unsubscribeOpen = db
+    .collection("hireconnect_requests")
+    .where("status", "==", "open")
+    .orderBy("submittedAt", "desc")
+    .onSnapshot(
+      (snap) => {
+        openRequests = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+        renderOpenRequests();
+        renderCompanySidebar();
+      },
+      (err) => {
+        console.error("HireConnect open listener error:", err);
+        // If index missing, Firestore logs a URL to create it in the console.
+        document.getElementById("openRequestsList").innerHTML =
+          `<div class="hc-empty">Error loading requests. Check console.</div>`;
+      }
+    );
+}
+
+function subscribeResolved() {
+  if (unsubscribeResolved) unsubscribeResolved();
+
+  unsubscribeResolved = db
+    .collection("hireconnect_requests")
+    .where("status", "==", "resolved")
+    .orderBy("resolvedAt", "desc")
+    .limit(50)
+    .onSnapshot(
+      (snap) => {
+        resolvedRequests = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+        renderResolvedRequests();
+      },
+      (err) => {
+        console.error("HireConnect resolved listener error:", err);
+      }
+    );
+}
+
+// ── Submit (anonymous) ───────────────────────────────────────
+
+async function submitRequest() {
+  const jobUrlEl   = document.getElementById("jobUrlInput");
+  const companyEl  = document.getElementById("companyInput");
+  const detailsEl  = document.getElementById("detailsInput");
+  const btn        = document.getElementById("submitBtn");
+
+  const jobUrl  = jobUrlEl.value.trim();
+  const company = companyEl.value.trim();
+  const details = detailsEl.value.trim();
+
+  if (!jobUrl)   return showError("Please enter a job posting URL.");
+  if (!jobUrl.startsWith("http://") && !jobUrl.startsWith("https://")) {
+    return showError("Please enter a valid URL starting with http:// or https://");
+  }
+  if (!company) return showError("Please enter a company name.");
+
+  btn.disabled    = true;
+  btn.textContent = "Submitting…";
+
+  try {
+    await db.collection("hireconnect_requests").add({
+      jobUrl,
+      company,
+      details,
+      status:      "open",
+      submittedAt: firebase.firestore.FieldValue.serverTimestamp(),
+    });
+    jobUrlEl.value  = "";
+    companyEl.value = "";
+    detailsEl.value = "";
+    showSuccess("Request submitted! The community will help you shortly.");
+  } catch (err) {
+    showError("Failed to submit: " + err.message);
+  } finally {
+    btn.disabled    = false;
+    btn.textContent = "Request Help";
+  }
+}
+
+// ── Expand / Collapse ─────────────────────────────────────────
+
+function toggleExpand(id) {
+  expandedRequestId = (expandedRequestId === id) ? null : id;
+  renderOpenRequests();
+}
+
+function toggleExpandResolved(id) {
+  expandedResolvedId = (expandedResolvedId === id) ? null : id;
+  renderResolvedRequests();
+}
+
+// ── Resolve ──────────────────────────────────────────────────
+
+async function resolveRequest(reqId) {
+  if (!currentUser) return showError("Please sign in to resolve a request.");
+
+  const hmInput      = document.getElementById("hm_" + reqId);
+  const notesInput   = document.getElementById("notes_" + reqId);
+  const referralEl   = document.querySelector(`input[name="ref_${reqId}"]:checked`);
+  const anonEl       = document.getElementById("anon_" + reqId);
+
+  const hiringManager   = hmInput    ? hmInput.value.trim()    : "";
+  const resolverNotes   = notesInput ? notesInput.value.trim() : "";
+  const referralIntent  = referralEl ? referralEl.value        : "no";
+  const stayAnonymous   = anonEl     ? anonEl.checked          : false;
+
+  if (!hiringManager) {
+    return showError("Please provide hiring manager info before resolving.");
+  }
+
+  const btn = document.getElementById("resolveBtn_" + reqId);
+  if (btn) { btn.disabled = true; btn.textContent = "Resolving…"; }
+
+  try {
+    await db.collection("hireconnect_requests").doc(reqId).update({
+      status:         "resolved",
+      resolvedAt:     firebase.firestore.FieldValue.serverTimestamp(),
+      resolvedBy:     stayAnonymous ? "" : (currentUser.displayName || currentUser.email || "Community Member"),
+      resolvedByUid:  currentUser.uid,
+      hiringManager,
+      referralIntent,
+      resolverNotes,
+    });
+    expandedRequestId = null;
+    // Firestore listeners automatically move the item to the resolved section
+  } catch (err) {
+    showError("Failed to resolve: " + err.message);
+    if (btn) { btn.disabled = false; btn.textContent = "Mark as Resolved"; }
+  }
+}
+
+// ── Render: expanded panel ────────────────────────────────────
+
+function buildExpandedPanel(req) {
+  if (!currentUser) {
+    return `
+      <div class="hc-expanded-panel">
+        <div class="hc-auth-prompt">
+          Sign in with Google to provide hiring manager info and help this person.
+          <button class="hc-signin-btn" onclick="signIn()">Sign In with Google</button>
+        </div>
+      </div>`;
+  }
+
+  const id = req.id;
+  return `
+    <div class="hc-expanded-panel">
+      <div class="hc-expanded-header">Help with this request</div>
+
+      <div class="hc-form-group">
+        <label for="hm_${id}">Hiring Manager Info</label>
+        <input
+          type="text"
+          id="hm_${id}"
+          class="hc-input"
+          style="width:100%"
+          placeholder="Name, LinkedIn profile URL, email, etc."
+          autocomplete="off"
+        />
+      </div>
+
+      <div class="hc-form-group">
+        <label>Referral Intent</label>
+        <div class="hc-radio-group">
+          <label><input type="radio" name="ref_${id}" value="yes" /> Yes, I can refer</label>
+          <label><input type="radio" name="ref_${id}" value="maybe" checked /> Maybe</label>
+          <label><input type="radio" name="ref_${id}" value="no" /> Info only</label>
+        </div>
+      </div>
+
+      <div class="hc-form-group">
+        <label for="notes_${id}">
+          Additional Notes <span class="hc-optional">(optional)</span>
+        </label>
+        <textarea
+          id="notes_${id}"
+          class="hc-textarea"
+          rows="2"
+          placeholder="Any extra context that might help…"
+        ></textarea>
+      </div>
+
+      <div class="hc-form-actions">
+        <label class="hc-anon-label">
+          <input type="checkbox" id="anon_${id}" class="hc-anon-checkbox" />
+          Stay anonymous
+        </label>
+        <button class="hc-cancel-btn" onclick="toggleExpand(null)">Cancel</button>
+        <button
+          id="resolveBtn_${id}"
+          class="hc-resolve-btn"
+          onclick="resolveRequest('${id}')"
+        >Mark as Resolved</button>
+      </div>
+    </div>`;
+}
+
+// ── Render: one open request row ──────────────────────────────
+
+function buildRequestRow(req) {
+  const isExpanded = expandedRequestId === req.id;
+  const safe       = safeUrl(req.jobUrl);
+  const label      = escapeHtml(truncateUrl(req.jobUrl));
+  const company    = escapeHtml(req.company || "");
+  const details    = escapeHtml(req.details || "");
+  const id         = req.id;
+
+  const article = document.createElement("article");
+  article.className = "hc-request-row" + (isExpanded ? " expanded" : "");
+  article.dataset.id = id;
+
+  article.innerHTML = `
+    <div class="hc-request-summary" onclick="toggleExpand('${id}')">
+      <button class="hc-chevron-btn" aria-expanded="${isExpanded}" aria-label="Expand request">
+        <span class="hc-chevron-icon">&#9658;</span>
+      </button>
+      <div class="hc-request-info">
+        <a
+          class="hc-job-url"
+          href="${safe}"
+          target="_blank"
+          rel="noopener noreferrer"
+          onclick="event.stopPropagation()"
+          title="${escapeHtml(req.jobUrl)}"
+        >${label}</a>
+        ${company ? `<span class="hc-company-badge">${company}</span>` : ""}
+        ${details ? `<span class="hc-details-preview">${details}</span>` : ""}
+      </div>
+      <button class="hc-open-btn" onclick="event.stopPropagation(); toggleExpand('${id}')">
+        ${isExpanded ? "Close" : "Open"}
+      </button>
+    </div>
+    ${isExpanded ? buildExpandedPanel(req) : ""}
+  `;
+
+  return article;
+}
+
+// ── Render: open requests list ────────────────────────────────
+
+function renderOpenRequests() {
+  const list = document.getElementById("openRequestsList");
+  if (!list) return;
+
+  const q        = searchQuery.toLowerCase();
+  const filtered = q
+    ? openRequests.filter(
+        (r) =>
+          (r.company || "").toLowerCase().includes(q) ||
+          (r.jobUrl  || "").toLowerCase().includes(q) ||
+          (r.details || "").toLowerCase().includes(q)
+      )
+    : openRequests;
+
+  if (filtered.length === 0) {
+    list.innerHTML = `<div class="hc-empty">${
+      q ? "No open requests matching your search." : "No open requests yet. Be the first to ask!"
+    }</div>`;
+    return;
+  }
+
+  list.innerHTML = "";
+  filtered.forEach((req) => list.appendChild(buildRequestRow(req)));
+}
+
+// ── Render: company sidebar ───────────────────────────────────
+
+function renderCompanySidebar() {
+  const sidebar = document.getElementById("companySidebar");
+  if (!sidebar) return;
+
+  const companies = [...new Set(openRequests.map((r) => r.company).filter(Boolean))].sort(
+    (a, b) => a.localeCompare(b)
+  );
+
+  if (companies.length === 0) {
+    sidebar.innerHTML = `<div class="hc-empty">—</div>`;
+    return;
+  }
+
+  sidebar.innerHTML = companies
+    .map(
+      (c) =>
+        `<div class="hc-company-item" onclick="filterByCompany('${escapeHtml(c).replace(/'/g, "\\'")}')">
+          ${escapeHtml(c)}
+        </div>`
+    )
+    .join("");
+}
+
+function filterByCompany(company) {
+  const box = document.getElementById("searchBox");
+  if (box) box.value = company;
+  searchQuery = company;
+  renderOpenRequests();
+}
+
+// ── Render: resolved detail panel ────────────────────────────
+
+function buildResolvedDetail(req) {
+  const hm       = escapeHtml(req.hiringManager  || "");
+  const notes    = escapeHtml(req.resolverNotes  || "");
+  const referral = req.referralIntent || "no";
+  const by       = escapeHtml(req.resolvedBy     || "Anonymous");
+
+  const referralLabel = { yes: "Yes, willing to refer", maybe: "Maybe", no: "Info only" }[referral] || referral;
+  const referralColor = { yes: "var(--p0)", maybe: "var(--p1)", no: "var(--muted)" }[referral] || "var(--muted)";
+
+  return `
+    <div class="hc-resolved-detail">
+      <div class="hc-detail-row">
+        <span class="hc-detail-label">Hiring Manager Info</span>
+        <span class="hc-detail-value">${hm || "<em>Not provided</em>"}</span>
+      </div>
+      <div class="hc-detail-row">
+        <span class="hc-detail-label">Referral Intent</span>
+        <span class="hc-detail-value" style="color:${referralColor};font-weight:600">${referralLabel}</span>
+      </div>
+      ${notes ? `
+      <div class="hc-detail-row">
+        <span class="hc-detail-label">Notes</span>
+        <span class="hc-detail-value">${notes}</span>
+      </div>` : ""}
+    </div>`;
+}
+
+// ── Render: resolved section ──────────────────────────────────
+
+function renderResolvedRequests() {
+  const list = document.getElementById("resolvedList");
+  if (!list) return;
+
+  if (resolvedRequests.length === 0) {
+    list.innerHTML = `<div class="hc-empty">No resolved requests yet.</div>`;
+    return;
+  }
+
+  list.innerHTML = "";
+  resolvedRequests.forEach((req) => {
+    const isExpanded = expandedResolvedId === req.id;
+    const safe       = safeUrl(req.jobUrl);
+    const label      = escapeHtml(truncateUrl(req.jobUrl));
+    const company    = escapeHtml(req.company || "");
+    const details    = escapeHtml(req.details  || "");
+    const thanks     = req.resolvedBy
+      ? "Thanks " + escapeHtml(req.resolvedBy) + "!"
+      : "Thanks Anonymous!";
+    const id = req.id;
+
+    const article = document.createElement("article");
+    article.className = "hc-request-row hc-resolved-item" + (isExpanded ? " expanded" : "");
+    article.dataset.id = id;
+
+    article.innerHTML = `
+      <div class="hc-request-summary" onclick="toggleExpandResolved('${id}')">
+        <button class="hc-chevron-btn" aria-expanded="${isExpanded}" aria-label="Expand resolved request">
+          <span class="hc-chevron-icon">&#9658;</span>
+        </button>
+        <div class="hc-request-info">
+          <a
+            class="hc-job-url"
+            href="${safe}"
+            target="_blank"
+            rel="noopener noreferrer"
+            onclick="event.stopPropagation()"
+            title="${escapeHtml(req.jobUrl)}"
+          >${label}</a>
+          ${company ? `<span class="hc-company-badge">${company}</span>` : ""}
+          ${details ? `<span class="hc-details-preview">${details}</span>` : ""}
+        </div>
+        <span class="hc-thanks-badge">${thanks}</span>
+      </div>
+      ${isExpanded ? buildResolvedDetail(req) : ""}
+    `;
+
+    list.appendChild(article);
+  });
+}
+
+// ── Search ────────────────────────────────────────────────────
+
+function onSearch(value) {
+  searchQuery = value.trim();
+  renderOpenRequests();
+}
+
+// ── Init ──────────────────────────────────────────────────────
+
+document.addEventListener("DOMContentLoaded", () => {
+  // Start real-time listeners (reads are public, no auth required)
+  subscribeOpen();
+  subscribeResolved();
+
+  // Auth observer
+  auth.onAuthStateChanged((user) => {
+    currentUser = user;
+    renderAuthBadge();
+    // If a request is expanded, re-render so the auth-gated panel updates
+    if (expandedRequestId !== null) {
+      renderOpenRequests();
+    }
+  });
+});
