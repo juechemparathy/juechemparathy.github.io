@@ -318,7 +318,7 @@ function buildRequestRow(req) {
         ${details ? `<span class="hc-details-preview">${details}</span>` : ""}
       </div>
       <button class="hc-open-btn" onclick="event.stopPropagation(); toggleExpand('${id}')">
-        ${isExpanded ? "Close" : "Open"}
+        ${isExpanded ? "Close" : "Help →"}
       </button>
     </div>
     ${isExpanded ? buildExpandedPanel(req) : ""}
@@ -343,9 +343,16 @@ function renderOpenRequests() {
       )
     : openRequests;
 
+  // Update count badge
+  const countEl = document.getElementById("openPanelCount");
+  if (countEl) {
+    countEl.textContent = filtered.length;
+    countEl.style.display = filtered.length > 0 ? "" : "none";
+  }
+
   if (filtered.length === 0) {
     list.innerHTML = `<div class="hc-empty">${
-      q ? "No open requests matching your search." : "No open requests yet. Be the first to ask!"
+      q ? "🔍 No results for \"" + escapeHtml(q) + "\"." : "🔍 No open requests yet. Be the first to ask for help!"
     }</div>`;
     return;
   }
@@ -364,8 +371,15 @@ function renderCompanySidebar() {
     (a, b) => a.localeCompare(b)
   );
 
+  // Update sidebar count badge
+  const countEl = document.getElementById("sidebarCount");
+  if (countEl) {
+    countEl.textContent = companies.length;
+    countEl.style.display = companies.length > 0 ? "" : "none";
+  }
+
   if (companies.length === 0) {
-    sidebar.innerHTML = `<div class="hc-empty">—</div>`;
+    sidebar.innerHTML = `<div class="hc-empty" style="padding:8px 0;font-size:12px">No open requests yet</div>`;
     return;
   }
 
@@ -421,8 +435,15 @@ function renderResolvedRequests() {
   const list = document.getElementById("resolvedList");
   if (!list) return;
 
+  // Update resolved count badge
+  const countEl = document.getElementById("resolvedCount");
+  if (countEl) {
+    countEl.textContent = resolvedRequests.length;
+    countEl.style.display = resolvedRequests.length > 0 ? "" : "none";
+  }
+
   if (resolvedRequests.length === 0) {
-    list.innerHTML = `<div class="hc-empty">No resolved requests yet.</div>`;
+    list.innerHTML = `<div class="hc-empty">✨ No resolved requests yet.</div>`;
     return;
   }
 

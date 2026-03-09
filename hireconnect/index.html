@@ -10,7 +10,7 @@
   <link rel="icon" type="image/x-icon" href="../icons/smash-logo.ico" />
   <link rel="apple-touch-icon" href="../icons/smash-logo.png" />
   <meta name="theme-color" content="#3b82f6" />
-  <meta name="description" content="HireConnect - Get help finding hiring manager contacts from your community" />
+  <meta name="description" content="HireConnect - Community-powered job networking for the Syro Malabar parish" />
 
   <!-- Firebase SDKs (same versions as main app) -->
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
@@ -28,72 +28,98 @@
   <div id="authArea" class="hc-auth-area"></div>
 </header>
 
-<!-- HERO MESSAGE -->
+<!-- HERO -->
 <section class="hc-hero">
   <div class="hc-hero-inner">
-    <p class="hc-hero-headline">Stop applying into the void. We are here to help!</p>
-    <p class="hc-hero-body">Job Seekers: Submit a job posting anonymously, and members of the Syro Malabar community can help identify the relevant hiring manager or internal contact. This helps you connect with the right people at companies you’re interested in and move beyond submitting applications blindly.</p>
-    <p class="hc-hero-body">Parishioners: If you work at the company, you can contribute by anonymously sharing hiring manager information or offering referral support, helping fellow community members increase their chances of securing an interview.</p>
+    <p class="hc-hero-headline">
+      Skip the void.<br>
+      <span class="hc-hero-sub">Your community knows who to call.</span>
+    </p>
+    <div class="hc-hero-cards">
+      <div class="hc-hero-card hc-hero-card--seeker">
+        <span class="hc-hero-card-icon">🎯</span>
+        <div>
+          <strong>Job Seekers</strong>
+          <p>Submit a job posting <b>anonymously</b>. Community members identify the hiring manager or internal contact — so you can reach the right person, not just submit into the void.</p>
+        </div>
+      </div>
+      <div class="hc-hero-card hc-hero-card--helper">
+        <span class="hc-hero-card-icon">🤝</span>
+        <div>
+          <strong>Parishioners</strong>
+          <p>Work at the company? <b>Anonymously</b> share hiring manager info or offer a referral. A few seconds of your time can change someone's career trajectory.</p>
+        </div>
+      </div>
+    </div>
   </div>
 </section>
 
-<!-- SUBMIT BAR (accessible to all, no auth required) -->
+<!-- SUBMIT BAR -->
 <section class="hc-submit-bar">
-  <div class="hc-submit-row">
-    <input
-      id="jobUrlInput"
-      type="url"
-      class="hc-input hc-url-input"
-      placeholder="Enter LinkedIn or other job posting URL"
-      autocomplete="off"
-    />
-    <input
-      id="companyInput"
-      type="text"
-      class="hc-input hc-company-input"
-      placeholder="Company name"
-      autocomplete="off"
-    />
-    <input
-      id="detailsInput"
-      type="text"
-      class="hc-input hc-details-input"
-      placeholder="Additional details (optional)"
-      autocomplete="off"
-    />
-    <button id="submitBtn" class="hc-submit-btn" onclick="submitRequest()">
-      Request Help
-    </button>
+  <div class="hc-submit-inner">
+    <p class="hc-submit-label">📌 Post a Connection Request — no sign-in needed</p>
+    <div class="hc-submit-row">
+      <input
+        id="jobUrlInput"
+        type="url"
+        class="hc-input hc-url-input"
+        placeholder="Paste LinkedIn or job posting URL"
+        autocomplete="off"
+      />
+      <input
+        id="companyInput"
+        type="text"
+        class="hc-input hc-company-input"
+        placeholder="Company name"
+        autocomplete="off"
+      />
+      <input
+        id="detailsInput"
+        type="text"
+        class="hc-input hc-details-input"
+        placeholder="Additional details (optional)"
+        autocomplete="off"
+      />
+      <button id="submitBtn" class="hc-submit-btn" onclick="submitRequest()">
+        Request Help
+      </button>
+    </div>
+    <div id="submitFeedback" class="hc-feedback" aria-live="polite"></div>
   </div>
-  <div id="submitFeedback" class="hc-feedback" aria-live="polite"></div>
 </section>
 
-<!-- MAIN: two-column (open requests + company sidebar) -->
+<!-- MAIN: two-column -->
 <main class="hc-main">
 
-  <!-- LEFT: Open requests waiting for hiring manager info -->
+  <!-- LEFT: Open requests -->
   <section class="hc-open-panel">
     <div class="hc-panel-header">
-      <h2>Open Postings Waiting for Hiring Manager Info</h2>
+      <h2>
+        Open Postings
+        <span id="openPanelCount" class="hc-count-badge" style="display:none"></span>
+      </h2>
       <input
         id="searchBox"
         type="search"
         class="hc-search"
-        placeholder="Search by company or URL..."
+        placeholder="🔍  Search by company or URL…"
         oninput="onSearch(this.value)"
         autocomplete="off"
       />
     </div>
     <div id="openRequestsList" class="hc-requests-list">
-      <div class="hc-empty">Loading...</div>
+      <div class="hc-empty">Loading…</div>
     </div>
   </section>
 
   <!-- RIGHT: Company sidebar -->
   <aside class="hc-sidebar">
-    <h3 class="hc-sidebar-title">Looking for Connections from Below Companies</h3>
+    <h3 id="sidebarTitle" class="hc-sidebar-title">
+      Companies
+      <span id="sidebarCount" class="hc-count-badge" style="display:none"></span>
+    </h3>
     <div id="companySidebar" class="hc-company-list">
-      <div class="hc-empty">—</div>
+      <div class="hc-empty" style="padding:8px 0">—</div>
     </div>
   </aside>
 
@@ -101,15 +127,17 @@
 
 <!-- RESOLVED SECTION -->
 <section class="hc-resolved-section">
-  <h2 class="hc-resolved-header">Resolved</h2>
+  <h2 class="hc-resolved-header">
+    ✅ Resolved
+    <span id="resolvedCount" class="hc-count-badge hc-count-badge--green" style="display:none"></span>
+  </h2>
   <div id="resolvedList" class="hc-requests-list">
-    <div class="hc-empty">No resolved requests yet.</div>
+    <div class="hc-empty">✨ No resolved requests yet.</div>
   </div>
 </section>
 
-<!-- Firebase config (relative path from hireconnect/ subdir) -->
+<!-- Firebase config -->
 <script src="../firebase-config.js"></script>
-<!-- Feature logic -->
 <script src="hireconnect.js"></script>
 
 </body>
