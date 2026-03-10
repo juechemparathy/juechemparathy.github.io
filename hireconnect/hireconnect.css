@@ -204,11 +204,46 @@ body {
   letter-spacing: 0.02em;
 }
 
+/* Sign-in prompt shown when user is not authenticated */
+.hc-submit-signin-prompt {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+  padding: 14px 0;
+}
+
+.hc-submit-signin-icon { font-size: 1.6rem; flex-shrink: 0; }
+
+.hc-submit-signin-prompt strong {
+  display: block;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--fg);
+  margin-bottom: 2px;
+}
+
+.hc-submit-signin-prompt p {
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.hc-submit-signin-prompt .hc-signin-btn { margin-left: auto; flex-shrink: 0; }
+
 .hc-submit-row {
   display: flex;
   gap: 8px;
   flex-wrap: wrap;
   align-items: center;
+}
+
+/* Wraps anon checkbox + submit button together */
+.hc-submit-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 6px;
+  flex-shrink: 0;
 }
 
 .hc-input {
@@ -564,6 +599,25 @@ body {
 }
 .hc-resolve-btn:hover { transform: translateY(-1px); box-shadow: 0 4px 12px rgba(16,185,129,0.4); }
 .hc-resolve-btn:disabled { opacity: 0.6; cursor: not-allowed; transform: none; }
+
+.hc-delete-btn {
+  flex-shrink: 0;
+  background: none;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  padding: 4px 7px;
+  font-size: 0.95rem;
+  cursor: pointer;
+  color: #ef4444;
+  opacity: 0.55;
+  transition: opacity 0.15s, background 0.15s, border-color 0.15s;
+  line-height: 1;
+}
+.hc-delete-btn:hover {
+  opacity: 1;
+  background: #fef2f2;
+  border-color: #fca5a5;
+}
 
 /* === SIDEBAR === */
 .hc-sidebar {

@@ -40,7 +40,7 @@
         <span class="hc-hero-card-icon">🎯</span>
         <div>
           <strong>Job Seekers</strong>
-          <p>Submit a job posting <b>anonymously</b>. Community members identify the hiring manager or internal contact — so you can reach the right person, not just submit into the void.</p>
+          <p>Sign in and submit a job posting — optionally <b>anonymously</b>. Community members identify the hiring manager or internal contact so you can reach the right person, not just apply into the void.</p>
         </div>
       </div>
       <div class="hc-hero-card hc-hero-card--helper">
@@ -56,35 +56,8 @@
 
 <!-- SUBMIT BAR -->
 <section class="hc-submit-bar">
-  <div class="hc-submit-inner">
-    <p class="hc-submit-label">📌 Post a Connection Request — no sign-in needed</p>
-    <div class="hc-submit-row">
-      <input
-        id="jobUrlInput"
-        type="url"
-        class="hc-input hc-url-input"
-        placeholder="Paste LinkedIn or job posting URL"
-        autocomplete="off"
-      />
-      <input
-        id="companyInput"
-        type="text"
-        class="hc-input hc-company-input"
-        placeholder="Company name"
-        autocomplete="off"
-      />
-      <input
-        id="detailsInput"
-        type="text"
-        class="hc-input hc-details-input"
-        placeholder="Additional details (optional)"
-        autocomplete="off"
-      />
-      <button id="submitBtn" class="hc-submit-btn" onclick="submitRequest()">
-        Request Help
-      </button>
-    </div>
-    <div id="submitFeedback" class="hc-feedback" aria-live="polite"></div>
+  <div class="hc-submit-inner" id="submitFormArea">
+    <!-- Rendered by renderSubmitArea() in hireconnect.js -->
   </div>
 </section>
 

@@ -13,6 +13,8 @@ let expandedResolvedId        = null;  // doc ID of expanded resolved row, or nu
 let searchQuery               = "";
 let unsubscribeOpen     = null;
 let unsubscribeResolved = null;
+let hcAdminEmails       = [];    // loaded from hireconnect_config/admins in Firestore
+let isHcAdmin           = false; // derived: currentUser.email in hcAdminEmails
 
 // ── Utilities ────────────────────────────────────────────────
 
@@ -127,17 +129,108 @@ function subscribeResolved() {
     );
 }
 
-// ── Submit (anonymous) ───────────────────────────────────────
+// ── Admin Config ─────────────────────────────────────────────
+
+function subscribeAdminConfig() {
+  db.collection("hireconnect_config").doc("admins").onSnapshot(
+    (snap) => {
+      hcAdminEmails = snap.exists ? (snap.data().emails || []) : [];
+      const email   = currentUser ? (currentUser.email || "").toLowerCase() : "";
+      isHcAdmin     = email && hcAdminEmails.map(e => e.toLowerCase()).includes(email);
+      // Re-render lists so delete buttons appear/disappear live
+      renderOpenRequests();
+      renderResolvedRequests();
+    },
+    () => { /* silent — no admin doc is valid state */ }
+  );
+}
+
+function updateAdminStatus() {
+  const email = currentUser ? (currentUser.email || "").toLowerCase() : "";
+  isHcAdmin   = email && hcAdminEmails.map(e => e.toLowerCase()).includes(email);
+}
+
+async function deleteRequest(id) {
+  if (!isHcAdmin) return;
+  if (!confirm("Delete this posting? This cannot be undone.")) return;
+  try {
+    await db.collection("hireconnect_requests").doc(id).delete();
+  } catch (err) {
+    alert("Delete failed: " + err.message);
+  }
+}
+
+// ── Submit Area Render ────────────────────────────────────────
+
+function renderSubmitArea() {
+  const area = document.getElementById("submitFormArea");
+  if (!area) return;
+
+  if (!currentUser) {
+    area.innerHTML = `
+      <div class="hc-submit-signin-prompt">
+        <span class="hc-submit-signin-icon">🔒</span>
+        <div>
+          <strong>Sign in to post a connection request</strong>
+          <p>You can choose to submit anonymously — your identity stays private.</p>
+        </div>
+        <button class="hc-signin-btn" onclick="signIn()">Sign in with Google</button>
+      </div>`;
+    return;
+  }
+
+  area.innerHTML = `
+    <p class="hc-submit-label">📌 Post a Connection Request</p>
+    <div class="hc-submit-row">
+      <input
+        id="jobUrlInput"
+        type="url"
+        class="hc-input hc-url-input"
+        placeholder="Paste LinkedIn or job posting URL"
+        autocomplete="off"
+      />
+      <input
+        id="companyInput"
+        type="text"
+        class="hc-input hc-company-input"
+        placeholder="Company name"
+        autocomplete="off"
+      />
+      <input
+        id="detailsInput"
+        type="text"
+        class="hc-input hc-details-input"
+        placeholder="Additional details (optional)"
+        autocomplete="off"
+      />
+      <div class="hc-submit-actions">
+        <label class="hc-anon-label">
+          <input type="checkbox" id="submitAnonCheck" class="hc-anon-checkbox" />
+          Submit anonymously
+        </label>
+        <button id="submitBtn" class="hc-submit-btn" onclick="submitRequest()">
+          Request Help
+        </button>
+      </div>
+    </div>
+    <div id="submitFeedback" class="hc-feedback" aria-live="polite"></div>`;
+}
+
+// ── Submit ────────────────────────────────────────────────────
 
 async function submitRequest() {
+  if (!currentUser) return showError("Please sign in to submit a request.");
+
   const jobUrlEl   = document.getElementById("jobUrlInput");
   const companyEl  = document.getElementById("companyInput");
   const detailsEl  = document.getElementById("detailsInput");
+  const anonEl     = document.getElementById("submitAnonCheck");
   const btn        = document.getElementById("submitBtn");
 
-  const jobUrl  = jobUrlEl.value.trim();
-  const company = companyEl.value.trim();
-  const details = detailsEl.value.trim();
+  const jobUrl       = jobUrlEl.value.trim();
+  const company      = companyEl.value.trim();
+  const details      = detailsEl.value.trim();
+  const stayAnonymous = anonEl ? anonEl.checked : false;
 
   if (!jobUrl)   return showError("Please enter a job posting URL.");
   if (!jobUrl.startsWith("http://") && !jobUrl.startsWith("https://")) {
@@ -153,12 +246,15 @@ async function submitRequest() {
       jobUrl,
       company,
       details,
-      status:      "open",
-      submittedAt: firebase.firestore.FieldValue.serverTimestamp(),
+      status:          "open",
+      submittedAt:     firebase.firestore.FieldValue.serverTimestamp(),
+      submittedBy:     stayAnonymous ? "" : (currentUser.displayName || currentUser.email || ""),
+      submittedByUid:  stayAnonymous ? "" : currentUser.uid,
     });
     jobUrlEl.value  = "";
     companyEl.value = "";
     detailsEl.value = "";
+    if (anonEl) anonEl.checked = false;
     showSuccess("Request submitted! The community will help you shortly.");
   } catch (err) {
     showError("Failed to submit: " + err.message);
@@ -320,6 +416,7 @@ function buildRequestRow(req) {
       <button class="hc-open-btn" onclick="event.stopPropagation(); toggleExpand('${id}')">
         ${isExpanded ? "Close" : "Help →"}
       </button>
+      ${isHcAdmin ? `<button class="hc-delete-btn" title="Delete posting" onclick="event.stopPropagation(); deleteRequest('${id}')">🗑</button>` : ""}
     </div>
     ${isExpanded ? buildExpandedPanel(req) : ""}
   `;
@@ -481,6 +578,7 @@ function renderResolvedRequests() {
           ${details ? `<span class="hc-details-preview">${details}</span>` : ""}
         </div>
         <span class="hc-thanks-badge">${thanks}</span>
+        ${isHcAdmin ? `<button class="hc-delete-btn" title="Delete posting" onclick="event.stopPropagation(); deleteRequest('${id}')">🗑</button>` : ""}
       </div>
       ${isExpanded ? buildResolvedDetail(req) : ""}
     `;
@@ -502,14 +600,16 @@ document.addEventListener("DOMContentLoaded", () => {
   // Start real-time listeners (reads are public, no auth required)
   subscribeOpen();
   subscribeResolved();
+  subscribeAdminConfig();
 
   // Auth observer
   auth.onAuthStateChanged((user) => {
     currentUser = user;
+    updateAdminStatus();
     renderAuthBadge();
-    // If a request is expanded, re-render so the auth-gated panel updates
-    if (expandedRequestId !== null) {
-      renderOpenRequests();
-    }
+    renderSubmitArea();
+    // Re-render lists to show/hide delete buttons and auth-gated panels
+    renderOpenRequests();
+    renderResolvedRequests();
   });
 });
