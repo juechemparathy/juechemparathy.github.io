@@ -15,6 +15,7 @@ let unsubscribeOpen     = null;
 let unsubscribeResolved = null;
 let hcAdminEmails       = [];    // loaded from hireconnect_config/admins in Firestore
 let isHcAdmin           = false; // derived: currentUser.email in hcAdminEmails
+let currentRole         = null;  // "seeker" | "connector" | null
 
 // ── Utilities ────────────────────────────────────────────────
 
@@ -69,19 +70,52 @@ function signOut() {
   auth.signOut().catch((e) => showError("Sign-out failed: " + e.message));
 }
 
+// ── Role ─────────────────────────────────────────────────────
+
+function roleKey()  { return `hc_role_${currentUser.uid}`; }
+function loadRole() { currentRole = localStorage.getItem(roleKey()) || null; }
+
+function saveRole(role) {
+  currentRole = role;
+  localStorage.setItem(roleKey(), role);
+  document.getElementById("rolePickerModal").style.display = "none";
+  renderAuthBadge();
+  renderSubmitArea();
+  renderOpenRequests();
+  renderResolvedRequests();
+  renderCompanySidebar();
+}
+
+function switchRole() {
+  currentRole = null;
+  localStorage.removeItem(roleKey());
+  document.getElementById("rolePickerModal").style.display = "flex";
+}
+
+function showRolePicker() {
+  document.getElementById("rolePickerModal").style.display = "flex";
+}
+
 function renderAuthBadge() {
   const area = document.getElementById("authArea");
   if (!area) return;
 
   if (currentUser) {
     const name = escapeHtml(currentUser.displayName || currentUser.email || "User");
+    const roleBadge = currentRole
+      ? `<span class="hc-role-badge hc-role-badge--${currentRole}">
+           ${currentRole === "seeker" ? "🎯 Seeker" : "🤝 Connector"}
+         </span>
+         <button class="hc-role-switch-btn" onclick="switchRole()">Switch</button>`
+      : "";
     area.innerHTML = `
+      ${roleBadge}
       <span class="hc-auth-name" title="${name}">${name}</span>
       <button class="hc-signout-btn" onclick="signOut()">Sign Out</button>
     `;
   } else {
     area.innerHTML = `
-      <button class="hc-signin-btn" onclick="signIn()">Sign in to Help</button>
+      <button class="hc-signin-btn" onclick="signIn()">Sign in</button>
     `;
   }
 }
@@ -249,7 +283,7 @@ async function submitRequest() {
       status:          "open",
       submittedAt:     firebase.firestore.FieldValue.serverTimestamp(),
       submittedBy:     stayAnonymous ? "" : (currentUser.displayName || currentUser.email || ""),
-      submittedByUid:  stayAnonymous ? "" : currentUser.uid,
+      submittedByUid:  currentUser.uid,   // always stored so Seekers can see their own tickets
     });
     jobUrlEl.value  = "";
     companyEl.value = "";
@@ -413,9 +447,7 @@ function buildRequestRow(req) {
         ${company ? `<span class="hc-company-badge">${company}</span>` : ""}
         ${details ? `<span class="hc-details-preview">${details}</span>` : ""}
       </div>
-      <button class="hc-open-btn" onclick="event.stopPropagation(); toggleExpand('${id}')">
-        ${isExpanded ? "Close" : "Help →"}
-      </button>
+      ${currentRole !== "seeker" ? `<button class="hc-open-btn" onclick="event.stopPropagation(); toggleExpand('${id}')">${isExpanded ? "Close" : "Help →"}</button>` : ""}
       ${isHcAdmin ? `<button class="hc-delete-btn" title="Delete posting" onclick="event.stopPropagation(); deleteRequest('${id}')">🗑</button>` : ""}
     </div>
     ${isExpanded ? buildExpandedPanel(req) : ""}
@@ -430,15 +462,30 @@ function renderOpenRequests() {
   const list = document.getElementById("openRequestsList");
   if (!list) return;
 
+  // Update panel title based on role
+  const titleEl = document.getElementById("openPanelTitle");
+  if (titleEl) {
+    // Replace text node content, preserving the count badge span child
+    const badge = titleEl.querySelector("#openPanelCount");
+    titleEl.textContent = currentRole === "seeker" ? "My Open Requests " : "Open Postings ";
+    if (badge) titleEl.appendChild(badge);
+  }
+
+  // Apply role filter first, then search filter
+  let source = openRequests;
+  if (currentRole === "seeker" && currentUser) {
+    source = source.filter((r) => r.submittedByUid === currentUser.uid);
+  }
+
   const q        = searchQuery.toLowerCase();
   const filtered = q
-    ? openRequests.filter(
+    ? source.filter(
         (r) =>
           (r.company || "").toLowerCase().includes(q) ||
           (r.jobUrl  || "").toLowerCase().includes(q) ||
           (r.details || "").toLowerCase().includes(q)
       )
-    : openRequests;
+    : source;
 
   // Update count badge
   const countEl = document.getElementById("openPanelCount");
@@ -447,10 +494,12 @@ function renderOpenRequests() {
     countEl.style.display = filtered.length > 0 ? "" : "none";
   }
 
+  const emptyMsg = currentRole === "seeker"
+    ? "📭 You haven't submitted any requests yet."
+    : (q ? `🔍 No results for "${escapeHtml(q)}".` : "🔍 No open requests yet. Be the first to ask for help!");
+
   if (filtered.length === 0) {
-    list.innerHTML = `<div class="hc-empty">${
-      q ? "🔍 No results for \"" + escapeHtml(q) + "\"." : "🔍 No open requests yet. Be the first to ask for help!"
-    }</div>`;
+    list.innerHTML = `<div class="hc-empty">${q && currentRole !== "seeker" ? `🔍 No results for "${escapeHtml(q)}".` : emptyMsg}</div>`;
     return;
   }
 
@@ -464,7 +513,10 @@ function renderCompanySidebar() {
   const sidebar = document.getElementById("companySidebar");
   if (!sidebar) return;
 
-  const companies = [...new Set(openRequests.map((r) => r.company).filter(Boolean))].sort(
+  const base = (currentRole === "seeker" && currentUser)
+    ? openRequests.filter((r) => r.submittedByUid === currentUser.uid)
+    : openRequests;
+  const companies = [...new Set(base.map((r) => r.company).filter(Boolean))].sort(
     (a, b) => a.localeCompare(b)
   );
 
@@ -532,20 +584,29 @@ function renderResolvedRequests() {
   const list = document.getElementById("resolvedList");
   if (!list) return;
 
+  // Apply role filter
+  const source = (currentRole === "seeker" && currentUser)
+    ? resolvedRequests.filter((r) => r.submittedByUid === currentUser.uid)
+    : resolvedRequests;
+
   // Update resolved count badge
   const countEl = document.getElementById("resolvedCount");
   if (countEl) {
-    countEl.textContent = resolvedRequests.length;
-    countEl.style.display = resolvedRequests.length > 0 ? "" : "none";
+    countEl.textContent = source.length;
+    countEl.style.display = source.length > 0 ? "" : "none";
   }
 
-  if (resolvedRequests.length === 0) {
-    list.innerHTML = `<div class="hc-empty">✨ No resolved requests yet.</div>`;
+  const emptyMsg = currentRole === "seeker"
+    ? "✨ None of your requests are resolved yet."
+    : "✨ No resolved requests yet.";
+
+  if (source.length === 0) {
+    list.innerHTML = `<div class="hc-empty">${emptyMsg}</div>`;
     return;
   }
 
   list.innerHTML = "";
-  resolvedRequests.forEach((req) => {
+  source.forEach((req) => {
     const isExpanded = expandedResolvedId === req.id;
     const safe       = safeUrl(req.jobUrl);
     const label      = escapeHtml(truncateUrl(req.jobUrl));
@@ -606,10 +667,17 @@ document.addEventListener("DOMContentLoaded", () => {
   auth.onAuthStateChanged((user) => {
     currentUser = user;
     updateAdminStatus();
+    if (user) {
+      loadRole();
+      if (!currentRole) showRolePicker();
+    } else {
+      currentRole = null;
+    }
     renderAuthBadge();
     renderSubmitArea();
-    // Re-render lists to show/hide delete buttons and auth-gated panels
+    // Re-render lists to show/hide delete buttons, role filters, and auth-gated panels
     renderOpenRequests();
     renderResolvedRequests();
+    renderCompanySidebar();
   });
 });

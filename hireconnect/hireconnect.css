@@ -787,3 +787,52 @@ body {
   .hc-submit-inner { padding: 0 14px; }
   .hc-hero-inner { padding: 0 14px; }
 }
+
+/* === ROLE PICKER MODAL === */
+.hc-role-modal {
+  position: fixed; inset: 0; z-index: 200;
+  background: rgba(0,0,0,0.55); backdrop-filter: blur(3px);
+  display: flex; align-items: center; justify-content: center;
+}
+.hc-role-modal-inner {
+  background: var(--card); border-radius: 20px;
+  padding: 40px 36px; max-width: 520px; width: 92%;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.2);
+  text-align: center;
+}
+.hc-role-modal-title { font-size: 1.4rem; margin: 0 0 6px; }
+.hc-role-modal-sub   { color: var(--muted); margin: 0 0 28px; font-size: 0.9rem; }
+.hc-role-cards-picker {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 14px;
+}
+.hc-role-card {
+  border: 2px solid var(--border); border-radius: 14px;
+  padding: 22px 16px; cursor: pointer; background: #fff;
+  display: flex; flex-direction: column; align-items: center; gap: 8px;
+  text-align: center; transition: all 0.18s; font-family: inherit;
+}
+.hc-role-card:hover { transform: translateY(-2px); box-shadow: var(--shadow-md); }
+.hc-role-card--seeker:hover    { border-color: var(--active); }
+.hc-role-card--connector:hover { border-color: var(--p0); }
+.hc-role-card-icon { font-size: 2rem; }
+.hc-role-card strong { font-size: 1rem; }
+.hc-role-card p { font-size: 0.82rem; color: var(--muted); margin: 0; }
+
+@media (max-width: 480px) {
+  .hc-role-cards-picker { grid-template-columns: 1fr; }
+  .hc-role-modal-inner  { padding: 28px 20px; }
+}
+
+/* === ROLE BADGE in AUTH AREA === */
+.hc-role-badge {
+  font-size: 0.75rem; font-weight: 600; padding: 3px 10px;
+  border-radius: 20px; white-space: nowrap;
+}
+.hc-role-badge--seeker    { background: #eff6ff; color: var(--active); border: 1px solid #bfdbfe; }
+.hc-role-badge--connector { background: #f0fdf4; color: var(--p0);     border: 1px solid #bbf7d0; }
+.hc-role-switch-btn {
+  background: none; border: none; padding: 0 4px;
+  font-size: 0.75rem; color: var(--muted); cursor: pointer;
+  text-decoration: underline; font-family: inherit;
+}
+.hc-role-switch-btn:hover { color: var(--fg); }

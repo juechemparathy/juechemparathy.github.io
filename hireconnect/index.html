@@ -67,7 +67,7 @@
   <!-- LEFT: Open requests -->
   <section class="hc-open-panel">
     <div class="hc-panel-header">
-      <h2>
+      <h2 id="openPanelTitle">
         Open Postings
         <span id="openPanelCount" class="hc-count-badge" style="display:none"></span>
       </h2>
@@ -108,6 +108,26 @@
     <div class="hc-empty">✨ No resolved requests yet.</div>
   </div>
 </section>
+
+<!-- ROLE PICKER MODAL -->
+<div id="rolePickerModal" class="hc-role-modal" style="display:none">
+  <div class="hc-role-modal-inner">
+    <h2 class="hc-role-modal-title">How are you joining today?</h2>
+    <p class="hc-role-modal-sub">Your choice shapes what you see. You can switch anytime.</p>
+    <div class="hc-role-cards-picker">
+      <button class="hc-role-card hc-role-card--seeker" onclick="saveRole('seeker')">
+        <span class="hc-role-card-icon">🎯</span>
+        <strong>I'm a Job Seeker</strong>
+        <p>Post a request and track your own submissions.</p>
+      </button>
+      <button class="hc-role-card hc-role-card--connector" onclick="saveRole('connector')">
+        <span class="hc-role-card-icon">🤝</span>
+        <strong>I'm a Connector</strong>
+        <p>Browse all open requests and help identify hiring managers.</p>
+      </button>
+    </div>
+  </div>
+</div>
 
 <!-- Firebase config -->
 <script src="../firebase-config.js"></script>
