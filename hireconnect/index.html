@@ -112,19 +112,41 @@
 <!-- ROLE PICKER MODAL -->
 <div id="rolePickerModal" class="hc-role-modal" style="display:none">
   <div class="hc-role-modal-inner">
-    <h2 class="hc-role-modal-title">How are you joining today?</h2>
-    <p class="hc-role-modal-sub">Your choice shapes what you see. You can switch anytime.</p>
-    <div class="hc-role-cards-picker">
-      <button class="hc-role-card hc-role-card--seeker" onclick="saveRole('seeker')">
-        <span class="hc-role-card-icon">🎯</span>
-        <strong>I'm a Job Seeker</strong>
-        <p>Post a request and track your own submissions.</p>
-      </button>
-      <button class="hc-role-card hc-role-card--connector" onclick="saveRole('connector')">
-        <span class="hc-role-card-icon">🤝</span>
-        <strong>I'm a Connector</strong>
-        <p>Browse all open requests and help identify hiring managers.</p>
-      </button>
+    <!-- Step 1: Role selection -->
+    <div id="roleStep1">
+      <h2 class="hc-role-modal-title">How are you joining today?</h2>
+      <p class="hc-role-modal-sub">Your choice shapes what you see. You can switch anytime.</p>
+      <div class="hc-role-cards-picker">
+        <button class="hc-role-card hc-role-card--seeker" onclick="saveRole('seeker')">
+          <span class="hc-role-card-icon">🎯</span>
+          <strong>I'm a Job Seeker</strong>
+          <p>Post a request and track your own submissions.</p>
+        </button>
+        <button class="hc-role-card hc-role-card--connector" onclick="showConnectorCompanyStep()">
+          <span class="hc-role-card-icon">🤝</span>
+          <strong>I'm a Connector</strong>
+          <p>Browse all open requests and help identify hiring managers.</p>
+        </button>
+      </div>
+    </div>
+    <!-- Step 2: Connector company input -->
+    <div id="roleStep2" style="display:none">
+      <h2 class="hc-role-modal-title">Where do you work?</h2>
+      <p class="hc-role-modal-sub">We'll show you open requests for your company first.</p>
+      <div class="hc-connector-company-form">
+        <input
+          id="connectorCompanyInput"
+          type="text"
+          class="hc-input"
+          placeholder="e.g. Google, Microsoft, Infosys…"
+          autocomplete="organization"
+        />
+        <div class="hc-connector-company-actions">
+          <button class="hc-cancel-btn" onclick="showRoleStep1()">← Back</button>
+          <button class="hc-submit-btn" onclick="registerConnector()">Continue</button>
+        </div>
+        <div id="connectorRegError" class="hc-feedback" style="display:none"></div>
+      </div>
     </div>
   </div>
 </div>

@@ -16,6 +16,9 @@ let unsubscribeResolved = null;
 let hcAdminEmails       = [];    // loaded from hireconnect_config/admins in Firestore
 let isHcAdmin           = false; // derived: currentUser.email in hcAdminEmails
 let currentRole         = null;  // "seeker" | "connector" | null
+let connectorProfile    = null;  // Firestore doc for current connector user
+let isConnectorApproved = false; // derived from connectorProfile.approved
+let unsubscribeConnectorProfile = null;
 
 // ── Utilities ────────────────────────────────────────────────
 
@@ -79,6 +82,7 @@ function saveRole(role) {
   currentRole = role;
   localStorage.setItem(roleKey(), role);
   document.getElementById("rolePickerModal").style.display = "none";
+  if (role === "connector") subscribeConnectorProfile();
   renderAuthBadge();
   renderSubmitArea();
   renderOpenRequests();
@@ -96,6 +100,83 @@ function showRolePicker() {
   document.getElementById("rolePickerModal").style.display = "flex";
 }
 
+function showConnectorCompanyStep() {
+  document.getElementById("roleStep1").style.display = "none";
+  document.getElementById("roleStep2").style.display = "";
+  const inp = document.getElementById("connectorCompanyInput");
+  if (inp) inp.focus();
+}
+
+function showRoleStep1() {
+  document.getElementById("roleStep2").style.display = "none";
+  document.getElementById("roleStep1").style.display = "";
+}
+
+async function registerConnector() {
+  const inp    = document.getElementById("connectorCompanyInput");
+  const errEl  = document.getElementById("connectorRegError");
+  const company = inp ? inp.value.trim() : "";
+
+  if (!company) {
+    errEl.textContent = "Please enter your company name.";
+    errEl.style.display = "";
+    return;
+  }
+  errEl.style.display = "none";
+
+  const btn = document.querySelector("#roleStep2 .hc-submit-btn");
+  if (btn) { btn.disabled = true; btn.textContent = "Saving…"; }
+
+  try {
+    await db.collection("hireconnect_connectors").doc(currentUser.uid).set({
+      uid:         currentUser.uid,
+      email:       currentUser.email || "",
+      displayName: currentUser.displayName || "",
+      company,
+      approved:    false,
+      requestedAt: firebase.firestore.FieldValue.serverTimestamp(),
+    }, { merge: true });  // merge so re-registering doesn't reset an already-approved status
+    saveRole("connector");
+  } catch (err) {
+    errEl.textContent = "Failed to save: " + err.message;
+    errEl.style.display = "";
+    if (btn) { btn.disabled = false; btn.textContent = "Continue"; }
+  }
+}
+
+// ── Connector Profile ─────────────────────────────────────────
+
+function subscribeConnectorProfile() {
+  if (unsubscribeConnectorProfile) { unsubscribeConnectorProfile(); unsubscribeConnectorProfile = null; }
+  if (!currentUser || currentRole !== "connector") return;
+
+  unsubscribeConnectorProfile = db
+    .collection("hireconnect_connectors")
+    .doc(currentUser.uid)
+    .onSnapshot((snap) => {
+      if (snap.exists) {
+        connectorProfile    = snap.data();
+        isConnectorApproved = connectorProfile.approved === true;
+
+        // Pre-filter by connector's company on first approved load
+        if (isConnectorApproved && connectorProfile.company) {
+          const box = document.getElementById("searchBox");
+          if (box && !box.value && !searchQuery) {
+            box.value   = connectorProfile.company;
+            searchQuery = connectorProfile.company;
+          }
+        }
+      } else {
+        connectorProfile    = null;
+        isConnectorApproved = false;
+      }
+      renderAuthBadge();
+      renderSubmitArea();
+      renderOpenRequests();
+      renderResolvedRequests();
+    }, () => {});
+}
+
 function renderAuthBadge() {
   const area = document.getElementById("authArea");
   if (!area) return;
@@ -108,8 +189,12 @@ function renderAuthBadge() {
          </span>
          <button class="hc-role-switch-btn" onclick="switchRole()">Switch</button>`
       : "";
+    const adminLink = isHcAdmin
+      ? `<a href="admin.html" class="hc-admin-link">⚙ Admin</a>`
+      : "";
     area.innerHTML = `
       ${roleBadge}
+      ${adminLink}
       <span class="hc-auth-name" title="${name}">${name}</span>
       <button class="hc-signout-btn" onclick="signOut()">Sign Out</button>
     `;
@@ -209,6 +294,21 @@ function renderSubmitArea() {
           <p>You can choose to submit anonymously — your identity stays private.</p>
         </div>
         <button class="hc-signin-btn" onclick="signIn()">Sign in with Google</button>
+      </div>`;
+    return;
+  }
+
+  if (currentRole === "connector") {
+    const approvedMsg = isConnectorApproved
+      ? "Browse open requests below and click <strong>Help →</strong> to provide hiring manager info."
+      : "Your account is <strong>pending admin approval</strong>. You'll be able to help once approved.";
+    area.innerHTML = `
+      <div class="hc-submit-signin-prompt">
+        <span class="hc-submit-signin-icon">🤝</span>
+        <div>
+          <strong>You're signed in as a Connector${connectorProfile ? " — " + escapeHtml(connectorProfile.company) : ""}</strong>
+          <p>${approvedMsg}</p>
+        </div>
       </div>`;
     return;
   }
@@ -353,6 +453,15 @@ async function resolveRequest(reqId) {
 // ── Render: expanded panel ────────────────────────────────────
 
 function buildExpandedPanel(req) {
+  if (currentRole === "connector" && !isConnectorApproved) {
+    return `
+      <div class="hc-expanded-panel">
+        <div class="hc-auth-prompt">
+          ⏳ Your Connector account is pending admin approval. You'll be able to help once approved.
+        </div>
+      </div>`;
+  }
+
   if (!currentUser) {
     return `
       <div class="hc-expanded-panel">
@@ -447,7 +556,11 @@ function buildRequestRow(req) {
         ${company ? `<span class="hc-company-badge">${company}</span>` : ""}
         ${details ? `<span class="hc-details-preview">${details}</span>` : ""}
       </div>
-      ${currentRole !== "seeker" ? `<button class="hc-open-btn" onclick="event.stopPropagation(); toggleExpand('${id}')">${isExpanded ? "Close" : "Help →"}</button>` : ""}
+      ${currentRole === "connector" && !isConnectorApproved
+        ? `<span class="hc-pending-badge">⏳ Pending Approval</span>`
+        : currentRole !== "seeker"
+          ? `<button class="hc-open-btn" onclick="event.stopPropagation(); toggleExpand('${id}')">${isExpanded ? "Close" : "Help →"}</button>`
+          : ""}
       ${isHcAdmin ? `<button class="hc-delete-btn" title="Delete posting" onclick="event.stopPropagation(); deleteRequest('${id}')">🗑</button>` : ""}
     </div>
     ${isExpanded ? buildExpandedPanel(req) : ""}
@@ -669,9 +782,19 @@ document.addEventListener("DOMContentLoaded", () => {
     updateAdminStatus();
     if (user) {
       loadRole();
-      if (!currentRole) showRolePicker();
+      if (!currentRole) {
+        showRolePicker();
+      } else if (currentRole === "connector") {
+        subscribeConnectorProfile();
+      }
     } else {
-      currentRole = null;
+      currentRole         = null;
+      connectorProfile    = null;
+      isConnectorApproved = false;
+      if (unsubscribeConnectorProfile) {
+        unsubscribeConnectorProfile();
+        unsubscribeConnectorProfile = null;
+      }
     }
     renderAuthBadge();
     renderSubmitArea();
