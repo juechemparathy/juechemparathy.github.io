@@ -30,7 +30,8 @@ const DEFAULT_CUTOFF_HOUR = 12; // noon of the day
 const ADMIN_EMAILS = [
   "jue.george@gmail.com",
   "binoybt@gmail.com",
-  "geojins@gmail.com"
+  "geojins@gmail.com",
+  "b.ajaymathews@gmail.com"
   // "you@example.com"
 ];
 
