@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+    <meta http-equiv="Pragma" content="no-cache" />
+    <meta http-equiv="Expires" content="0" />
+    <link rel="icon" type="image/x-icon" href="icons/smash-logo.ico">
+    <meta name="theme-color" content="#3b82f6">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-title" content="SMASH">
+    <link rel="apple-touch-icon" href="icons/smash-logo.png">
+    <title>SMASH Events</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: system-ui, -apple-system, 'Segoe UI', Roboto, Arial, sans-serif;
+            background: #f6f7fb;
+            color: #1f2937;
+            min-height: 100vh;
+        }
+
+        .topbar {
+            position: sticky; top: 0; z-index: 5;
+            display: grid; grid-template-columns: auto 1fr auto;
+            align-items: center; padding: 10px 14px;
+            background: #fff; border-bottom: 1px solid #e5e7eb; gap: 12px;
+        }
+        .brand { display: flex; align-items: center; gap: 8px; }
+        .title-icon { width: 48px; height: 48px; border-radius: 12px; object-fit: cover; box-shadow: 0 6px 12px rgba(0,0,0,.15); }
+        .title-bar {
+            text-align: center; margin: 0; font-size: clamp(1.2rem,4vw,1.8rem);
+            letter-spacing: .08em; text-transform: uppercase;
+            background: linear-gradient(120deg,#ff8a00,#ff3d7f,#7b2ff7);
+            -webkit-background-clip: text; color: transparent;
+            text-shadow: 0 2px 12px rgba(255,61,127,.3);
+        }
+        .nav-links { display: flex; align-items: center; gap: 10px; }
+        .nav-btn {
+            padding: 8px 14px; border-radius: 8px; border: 1px solid #e5e7eb;
+            background: #fff; font-weight: 600; font-size: 14px; color: #1f2937;
+            text-decoration: none; cursor: pointer; transition: all 0.2s;
+        }
+        .nav-btn:hover { background: #f9fafb; border-color: #3b82f6; }
+        .nav-btn.admin { background: #3b82f6; color: #fff; border-color: #3b82f6; }
+        .nav-btn.admin:hover { background: #2563eb; }
+
+        .container { max-width: 1100px; margin: 0 auto; padding: 20px 12px; }
+
+        .page-header { text-align: center; margin-bottom: 24px; }
+        .page-header h2 { font-size: 1.5rem; color: #1f2937; margin-bottom: 4px; }
+        .page-header p { color: #6b7280; font-size: 0.95rem; }
+
+        .no-events { text-align: center; padding: 40px; color: #6b7280; font-style: italic; }
+
+        /* Table Styles */
+        .events-table-wrapper { overflow-x: auto; border-radius: 12px; border: 1px solid #e5e7eb; background: #fff; }
+        table { width: 100%; border-collapse: collapse; }
+        thead { background: linear-gradient(135deg, #667eea, #764ba2); color: #fff; }
+        th { padding: 14px 16px; text-align: left; font-weight: 600; font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.05em; white-space: nowrap; }
+        td { padding: 12px 16px; border-bottom: 1px solid #f3f4f6; font-size: 0.95rem; vertical-align: top; }
+        tbody tr:hover { background: #f9fafb; }
+        tbody tr:last-child td { border-bottom: none; }
+
+        .event-name { font-weight: 600; color: #1e293b; }
+        .event-date { white-space: nowrap; font-weight: 500; color: #7c3aed; }
+        .event-desc { color: #4b5563; max-width: 280px; }
+        .event-venue { color: #0369a1; }
+        .event-contact { white-space: nowrap; }
+        .reg-link {
+            display: inline-block; padding: 4px 12px; border-radius: 6px;
+            background: #10b981; color: #fff; text-decoration: none;
+            font-size: 0.85rem; font-weight: 600; transition: background 0.2s;
+        }
+        .reg-link:hover { background: #059669; }
+
+        .badge-upcoming { display: inline-block; padding: 2px 8px; border-radius: 999px; background: #dbeafe; color: #1d4ed8; font-size: 0.75rem; font-weight: 600; margin-left: 6px; }
+        .badge-today { background: #dcfce7; color: #166534; }
+        .badge-past { background: #f3f4f6; color: #9ca3af; }
+
+        .footer { text-align: center; margin-top: 40px; padding: 20px; }
+        .back-btn {
+            display: inline-block; padding: 10px 24px;
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: white; text-decoration: none; border-radius: 10px;
+            font-weight: 600; transition: all 0.3s ease;
+            box-shadow: 0 4px 12px rgba(102,126,234,0.4);
+        }
+        .back-btn:hover { transform: translateY(-2px); box-shadow: 0 6px 20px rgba(102,126,234,0.5); }
+
+        /* Card layout for mobile */
+        .events-cards { display: none; }
+        .event-card {
+            background: #fff; border: 1px solid #e5e7eb; border-radius: 14px;
+            padding: 16px; margin-bottom: 12px;
+        }
+        .event-card .card-title { font-weight: 700; font-size: 1.05rem; color: #1e293b; margin-bottom: 8px; }
+        .event-card .card-row { display: flex; gap: 8px; margin-bottom: 6px; font-size: 0.9rem; }
+        .event-card .card-label { font-weight: 600; color: #6b7280; min-width: 90px; }
+        .event-card .card-value { color: #1f2937; }
+
+        @media (max-width: 768px) {
+            .events-table-wrapper { display: none; }
+            .events-cards { display: block; }
+        }
+    </style>
+
+    <!-- Firebase SDKs -->
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+</head>
+<body>
+<header class="topbar">
+    <div class="brand">
+        <img src="icons/smash-logo.png" alt="SMASH Logo" class="title-icon" />
+    </div>
+    <h1 class="title-bar">SMASH Events</h1>
+    <div class="nav-links">
+        <a href="index.html" class="nav-btn">Schedule</a>
+        <a href="events-admin.html" class="nav-btn admin" id="adminLink" style="display:none;">Admin</a>
+    </div>
+</header>
+
+<main class="container">
+    <div class="page-header">
+        <h2>Upcoming Events</h2>
+        <p>Stay informed about SMASH community events and activities</p>
+    </div>
+
+    <!-- Desktop Table -->
+    <div class="events-table-wrapper">
+        <table>
+            <thead>
+                <tr>
+                    <th>Event</th>
+                    <th>Date</th>
+                    <th>Description</th>
+                    <th>Venue</th>
+                    <th>Contact</th>
+                    <th>Registration</th>
+                </tr>
+            </thead>
+            <tbody id="eventsTableBody">
+                <tr><td colspan="6" class="no-events">Loading events...</td></tr>
+            </tbody>
+        </table>
+    </div>
+
+    <!-- Mobile Cards -->
+    <div class="events-cards" id="eventsCards">
+        <p class="no-events">Loading events...</p>
+    </div>
+
+    <div class="footer">
+        <a href="index.html" class="back-btn">&larr; Back to Schedule</a>
+    </div>
+</main>
+
+<script src="firebase-config.js?v=6"></script>
+<script>
+const ADMIN_EMAILS = [
+    "jue.george@gmail.com",
+    "binoybt@gmail.com",
+    "geojins@gmail.com"
+];
+
+// Show admin link for admins
+auth.onAuthStateChanged(user => {
+    if (user && ADMIN_EMAILS.includes(user.email)) {
+        document.getElementById('adminLink').style.display = '';
+    }
+});
+
+function formatDate(dateStr) {
+    const d = new Date(dateStr + 'T00:00:00');
+    return d.toLocaleDateString('en-US', { weekday: 'short', year: 'numeric', month: 'short', day: 'numeric' });
+}
+
+function getDateBadge(dateStr, endDateStr) {
+    const today = new Date();
+    today.setHours(0,0,0,0);
+    const startDate = new Date(dateStr + 'T00:00:00');
+    startDate.setHours(0,0,0,0);
+    const endDate = endDateStr ? new Date(endDateStr + 'T00:00:00') : startDate;
+    endDate.setHours(0,0,0,0);
+    if (today > endDate) return '<span class="badge-upcoming badge-past">Past</span>';
+    if (today >= startDate && today <= endDate) return '<span class="badge-upcoming badge-today">Ongoing</span>';
+    return '<span class="badge-upcoming">Upcoming</span>';
+}
+
+function formatDateRange(dateStr, endDateStr) {
+    const start = formatDate(dateStr);
+    if (!endDateStr) return start;
+    return start + ' — ' + formatDate(endDateStr);
+}
+
+function escapeHtml(str) {
+    if (!str) return '';
+    const div = document.createElement('div');
+    div.textContent = str;
+    return div.innerHTML;
+}
+
+function formatContact(contact, phone) {
+    if (!contact && !phone) return '';
+    let html = contact ? escapeHtml(contact) : '';
+    if (phone) {
+        if (html) html += '<br>';
+        html += '<a href="tel:' + escapeHtml(phone) + '" style="color:#3b82f6;text-decoration:none;">' + escapeHtml(phone) + '</a>';
+    }
+    return html;
+}
+
+function renderEvents(events) {
+    const tbody = document.getElementById('eventsTableBody');
+    const cards = document.getElementById('eventsCards');
+
+    if (events.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="6" class="no-events">No events scheduled at this time.</td></tr>';
+        cards.innerHTML = '<p class="no-events">No events scheduled at this time.</p>';
+        return;
+    }
+
+    // Table rows
+    tbody.innerHTML = events.map(e => `
+        <tr>
+            <td class="event-name">${escapeHtml(e.name)}</td>
+            <td class="event-date">${formatDateRange(e.date, e.endDate)} ${getDateBadge(e.date, e.endDate)}</td>
+            <td class="event-desc">${escapeHtml(e.description)}</td>
+            <td class="event-venue">${escapeHtml(e.venue)}</td>
+            <td class="event-contact">${formatContact(e.contact, e.phone)}</td>
+            <td>${e.registration ? `<a href="${escapeHtml(e.registration)}" target="_blank" class="reg-link">Register</a>` : '<span style="color:#9ca3af">—</span>'}</td>
+        </tr>
+    `).join('');
+
+    // Mobile cards
+    cards.innerHTML = events.map(e => `
+        <div class="event-card">
+            <div class="card-title">${escapeHtml(e.name)} ${getDateBadge(e.date, e.endDate)}</div>
+            <div class="card-row"><span class="card-label">Date</span><span class="card-value" style="color:#7c3aed;font-weight:500">${formatDateRange(e.date, e.endDate)}</span></div>
+            <div class="card-row"><span class="card-label">Description</span><span class="card-value">${escapeHtml(e.description)}</span></div>
+            <div class="card-row"><span class="card-label">Venue</span><span class="card-value" style="color:#0369a1">${escapeHtml(e.venue)}</span></div>
+            <div class="card-row"><span class="card-label">Contact</span><span class="card-value">${formatContact(e.contact, e.phone)}</span></div>
+            <div class="card-row"><span class="card-label">Registration</span><span class="card-value">${e.registration ? `<a href="${escapeHtml(e.registration)}" target="_blank" class="reg-link">Register</a>` : '<span style="color:#9ca3af">—</span>'}</span></div>
+        </div>
+    `).join('');
+}
+
+// Load events from Firestore, ordered by date
+db.collection('events').orderBy('date', 'asc').onSnapshot(snapshot => {
+    const events = [];
+    snapshot.forEach(doc => {
+        events.push({ id: doc.id, ...doc.data() });
+    });
+    renderEvents(events);
+}, err => {
+    console.error('Error loading events:', err);
+    document.getElementById('eventsTableBody').innerHTML =
+        '<tr><td colspan="6" class="no-events">Error loading events. Please refresh.</td></tr>';
+});
+</script>
+</body>
+</html>
