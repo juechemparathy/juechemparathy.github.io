@@ -253,7 +253,16 @@ async function handleSubmit(ev) {
     btn.disabled = true;
     btn.textContent = 'Submitting...';
 
-    const familyId = document.getElementById('familyId').value.trim();
+    const familyIdRaw = document.getElementById('familyId').value.trim();
+    const familyId = parseInt(familyIdRaw);
+
+    // Validate Family ID is a positive number
+    if (!familyIdRaw || isNaN(familyId) || familyId < 1 || !Number.isInteger(familyId)) {
+        alert('Please enter a valid Family ID (must be a positive whole number).');
+        btn.disabled = false;
+        btn.textContent = 'Submit RSVP';
+        return;
+    }
 
     // Check if this Family ID already submitted for this event
     try {
