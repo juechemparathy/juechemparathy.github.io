@@ -554,22 +554,27 @@ async function handleSubmit(ev) {
     try {
         var existing = await db.collection('rsvpResponses')
             .where('eventId', '==', eventId)
-            .where('familyId', '==', familyId)
             .get();
 
         var isDuplicate = false;
         existing.forEach(function(doc) {
-            if (doc.id !== editingDocId) isDuplicate = true;
+            if (doc.id !== editingDocId && doc.data().familyId == familyId) {
+                isDuplicate = true;
+            }
         });
 
         if (isDuplicate) {
-            showError('RSVP Already Submitted', 'An RSVP has already been submitted for Family ID ' + familyId + '. Please reach out to the admin to make adjustments.');
+            showError('RSVP Already Submitted', 'An RSVP has already been submitted for Family ID ' + familyId + '. Please reach out to the admin to make adjustments.', ['familyId']);
             btn.disabled = false;
             btn.textContent = editingDocId ? 'Update RSVP' : 'Submit RSVP';
             return;
         }
     } catch (err) {
         console.error('Error checking duplicate:', err);
+        showError('Validation Error', 'Unable to verify your submission. Please try again.', []);
+        btn.disabled = false;
+        btn.textContent = editingDocId ? 'Update RSVP' : 'Submit RSVP';
+        return;
     }
 
     var data = {
