@@ -35,12 +35,15 @@
             text-shadow: 0 2px 12px rgba(255,61,127,.3);
         }
         .nav-links { display: flex; align-items: center; gap: 10px; }
-        .nav-btn {
+        .auth-btn {
             padding: 8px 14px; border-radius: 8px; border: 1px solid #e5e7eb;
-            background: #fff; font-weight: 600; font-size: 14px; color: #1f2937;
-            text-decoration: none; cursor: pointer; transition: all 0.2s;
+            background: #fff; font-weight: 600; font-size: 13px; color: #1f2937;
+            cursor: pointer; transition: all 0.2s; white-space: nowrap;
         }
-        .nav-btn:hover { background: #f9fafb; border-color: #3b82f6; }
+        .auth-btn:hover { background: #f9fafb; border-color: #3b82f6; }
+        .auth-btn.signin { background: #3b82f6; color: #fff; border-color: #3b82f6; }
+        .auth-btn.signin:hover { background: #2563eb; }
+        .user-name { font-size: 13px; font-weight: 600; color: #374151; max-width: 120px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
         .container { max-width: 600px; margin: 0 auto; padding: 20px 12px; }
 
@@ -78,7 +81,6 @@
         .form-group input:focus, .form-group select:focus {
             outline: none; border-color: #3b82f6; box-shadow: 0 0 0 3px rgba(59,130,246,0.1);
         }
-        .optional { font-weight: 400; color: #9ca3af; font-size: 0.75rem; text-transform: none; }
         .form-actions { margin-top: 20px; }
         .submit-btn {
             width: 100%; padding: 14px; border-radius: 10px; border: none;
@@ -89,10 +91,20 @@
         .submit-btn:hover { transform: translateY(-2px); box-shadow: 0 6px 20px rgba(102,126,234,0.5); }
         .submit-btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none; box-shadow: none; }
 
-        /* States */
-        .state-message {
-            text-align: center; padding: 60px 20px;
+        /* Error banner */
+        .error-banner {
+            background: #fef2f2; border: 1px solid #fca5a5; border-radius: 12px;
+            padding: 16px 20px; margin-bottom: 24px; display: none;
         }
+        .error-banner .error-title {
+            font-weight: 700; color: #991b1b; font-size: 1rem; margin-bottom: 6px;
+        }
+        .error-banner .error-msg {
+            color: #b91c1c; font-size: 0.9rem; line-height: 1.5;
+        }
+
+        /* States */
+        .state-message { text-align: center; padding: 60px 20px; }
         .state-message h2 { margin-bottom: 12px; }
         .state-message p { color: #6b7280; margin-bottom: 20px; }
         .state-message.error h2 { color: #ef4444; }
@@ -109,14 +121,43 @@
         }
         .back-btn:hover { transform: translateY(-2px); box-shadow: 0 6px 20px rgba(102,126,234,0.5); }
 
+        /* My RSVPs section */
+        .my-rsvps {
+            background: #fff; border: 1px solid #e5e7eb; border-radius: 16px;
+            padding: 24px; margin-bottom: 24px; display: none;
+        }
+        .my-rsvps h3 { font-size: 1.1rem; color: #1e293b; margin-bottom: 16px; }
+        .rsvp-card {
+            background: #f8fafc; border: 1px solid #e5e7eb; border-radius: 12px;
+            padding: 14px; margin-bottom: 10px;
+        }
+        .rsvp-card .rsvp-event-name { font-weight: 700; color: #1e293b; font-size: 0.95rem; }
+        .rsvp-card .rsvp-event-time { color: #7c3aed; font-size: 0.85rem; font-weight: 500; margin-top: 2px; }
+        .rsvp-card .rsvp-details { display: flex; gap: 16px; flex-wrap: wrap; margin-top: 8px; font-size: 0.85rem; color: #4b5563; }
+        .rsvp-card .rsvp-details span { display: flex; align-items: center; gap: 4px; }
+        .rsvp-card .rsvp-details strong { color: #1e293b; }
+        .rsvp-card .rsvp-edit-link {
+            display: inline-block; margin-top: 8px; color: #3b82f6;
+            font-weight: 600; font-size: 0.85rem; text-decoration: none; cursor: pointer;
+        }
+        .rsvp-card .rsvp-edit-link:hover { text-decoration: underline; }
+        .rsvp-card.current { border-color: #93c5fd; background: #eff6ff; }
+        .editing-badge {
+            display: inline-block; padding: 2px 8px; border-radius: 999px;
+            background: #dbeafe; color: #1d4ed8; font-size: 0.75rem; font-weight: 600;
+            margin-left: 8px;
+        }
+
         @media (max-width: 640px) {
             .form-grid { grid-template-columns: 1fr; }
+            .user-name { display: none; }
         }
     </style>
 
     <!-- Firebase SDKs -->
     <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
 </head>
 <body>
 <header class="topbar">
@@ -124,7 +165,11 @@
         <img src="icons/smash-logo.png" alt="SMASH Logo" class="title-icon" />
     </div>
     <h1 class="title-bar">SMASH RSVP</h1>
-    <div class="nav-links"></div>
+    <div class="nav-links">
+        <div id="authArea">
+            <button class="auth-btn signin" onclick="signIn()">Sign In</button>
+        </div>
+    </div>
 </header>
 
 <!-- Loading State -->
@@ -136,9 +181,6 @@
 <div id="errorState" class="state-message error" style="display:none;">
     <h2>Event Not Found</h2>
     <p>This event link is invalid or the event no longer exists.</p>
-    <div class="footer">
-        <a href="index.html" class="back-btn">&larr; Back to Schedule</a>
-    </div>
 </div>
 
 <!-- Success State -->
@@ -155,8 +197,15 @@
 <main id="mainContent" class="container" style="display:none;">
     <div class="event-header" id="eventHeader"></div>
 
-    <div class="form-card">
-        <h3>Your Response</h3>
+    <!-- Error banner -->
+    <div class="error-banner" id="errorBanner">
+        <div class="error-title" id="errorBannerTitle"></div>
+        <div class="error-msg" id="errorBannerMsg"></div>
+    </div>
+
+    <!-- RSVP Form -->
+    <div class="form-card" id="formCard">
+        <h3 id="formTitle">Your Response</h3>
         <form id="rsvpForm" onsubmit="handleSubmit(event)">
             <div class="form-grid">
                 <div class="form-group">
@@ -185,35 +234,43 @@
             </div>
         </form>
     </div>
+
+    <!-- My RSVPs (shown when logged in) -->
+    <div class="my-rsvps" id="myRsvps">
+        <h3>Your RSVPs</h3>
+        <div id="myRsvpsList"></div>
+    </div>
 </main>
 
 <script src="firebase-config.js?v=6"></script>
 <script>
-const params = new URLSearchParams(window.location.search);
-const eventId = params.get('id');
-let currentEvent = null;
+var params = new URLSearchParams(window.location.search);
+var eventId = params.get('id');
+var currentEvent = null;
+var currentUser = null;
+var editingDocId = null; // Set when editing own existing RSVP
 
 // Populate dropdowns
 (function() {
-    const adultsSelect = document.getElementById('adults');
-    const kidsSelect = document.getElementById('kids');
-    for (let i = 1; i <= 10; i++) {
-        adultsSelect.innerHTML += `<option value="${i}">${i}</option>`;
+    var adultsSelect = document.getElementById('adults');
+    var kidsSelect = document.getElementById('kids');
+    for (var i = 1; i <= 10; i++) {
+        adultsSelect.innerHTML += '<option value="' + i + '">' + i + '</option>';
     }
-    for (let i = 0; i <= 10; i++) {
-        kidsSelect.innerHTML += `<option value="${i}">${i}</option>`;
+    for (var i = 0; i <= 10; i++) {
+        kidsSelect.innerHTML += '<option value="' + i + '">' + i + '</option>';
     }
 })();
 
 function escapeHtml(str) {
     if (!str) return '';
-    const div = document.createElement('div');
+    var div = document.createElement('div');
     div.textContent = str;
     return div.innerHTML;
 }
 
 function formatEventTime(timeStr) {
-    const d = new Date(timeStr);
+    var d = new Date(timeStr);
     return d.toLocaleDateString('en-US', {
         weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
         hour: 'numeric', minute: '2-digit'
@@ -221,84 +278,304 @@ function formatEventTime(timeStr) {
 }
 
 function showState(stateId) {
-    ['loadingState', 'errorState', 'successState', 'mainContent'].forEach(id => {
+    ['loadingState', 'errorState', 'successState', 'mainContent'].forEach(function(id) {
         document.getElementById(id).style.display = id === stateId ? '' : 'none';
     });
 }
+
+// Auth
+function signIn() {
+    var provider = new firebase.auth.GoogleAuthProvider();
+    auth.signInWithPopup(provider).catch(function(err) {
+        console.error('Sign-in error:', err);
+    });
+}
+
+function signOut() {
+    auth.signOut();
+}
+
+auth.onAuthStateChanged(function(user) {
+    currentUser = user;
+    var authArea = document.getElementById('authArea');
+    if (user) {
+        authArea.innerHTML =
+            '<span class="user-name">' + escapeHtml(user.displayName || user.email) + '</span>' +
+            '<button class="auth-btn" onclick="signOut()">Sign Out</button>';
+        // If event is already loaded, check for user's existing RSVP
+        if (currentEvent && eventId) {
+            loadUserRsvps();
+        }
+    } else {
+        authArea.innerHTML = '<button class="auth-btn signin" onclick="signIn()">Sign In</button>';
+        editingDocId = null;
+        document.getElementById('formTitle').textContent = 'Your Response';
+        document.getElementById('submitBtn').textContent = 'Submit RSVP';
+        document.getElementById('myRsvps').style.display = 'none';
+    }
+});
 
 async function loadEvent() {
     if (!eventId) { showState('errorState'); return; }
 
     try {
-        const doc = await db.collection('rsvpEvents').doc(eventId).get();
+        var doc = await db.collection('rsvpEvents').doc(eventId).get();
         if (!doc.exists) { showState('errorState'); return; }
 
         currentEvent = doc.data();
-        document.getElementById('eventHeader').innerHTML = `
-            <h2>${escapeHtml(currentEvent.name)}</h2>
-            ${currentEvent.description ? `<div class="event-desc">${escapeHtml(currentEvent.description)}</div>` : ''}
-            <div class="event-time">&#128197; ${formatEventTime(currentEvent.eventTime)}</div>
-        `;
-        document.title = `RSVP - ${currentEvent.name}`;
+        document.getElementById('eventHeader').innerHTML =
+            '<h2>' + escapeHtml(currentEvent.name) + '</h2>' +
+            (currentEvent.description ? '<div class="event-desc">' + escapeHtml(currentEvent.description) + '</div>' : '') +
+            '<div class="event-time">&#128197; ' + formatEventTime(currentEvent.eventTime) + '</div>';
+        document.title = 'RSVP - ' + currentEvent.name;
         showState('mainContent');
+
+        // If already logged in, load user's RSVPs
+        if (currentUser) {
+            loadUserRsvps();
+        }
     } catch (err) {
         console.error('Error loading event:', err);
         showState('errorState');
     }
 }
 
+// Load user's RSVPs (current event + other events)
+async function loadUserRsvps() {
+    if (!currentUser) return;
+
+    try {
+        var snapshot = await db.collection('rsvpResponses')
+            .where('uid', '==', currentUser.uid)
+            .get();
+
+        var myRsvps = [];
+        snapshot.forEach(function(doc) { myRsvps.push({ id: doc.id, ...doc.data() }); });
+
+        // Check if user has RSVP for current event
+        var currentRsvp = myRsvps.find(function(r) { return r.eventId === eventId; });
+        if (currentRsvp) {
+            // Pre-fill form for editing
+            editingDocId = currentRsvp.id;
+            document.getElementById('firstName').value = currentRsvp.firstName || '';
+            document.getElementById('lastName').value = currentRsvp.lastName || '';
+            document.getElementById('familyId').value = currentRsvp.familyId || '';
+            document.getElementById('adults').value = currentRsvp.adults || 1;
+            document.getElementById('kids').value = currentRsvp.kids || 0;
+            document.getElementById('formTitle').textContent = 'Update Your Response';
+            document.getElementById('submitBtn').textContent = 'Update RSVP';
+        }
+
+        // Show RSVPs for other events
+        var otherRsvps = myRsvps.filter(function(r) { return r.eventId !== eventId; });
+        if (otherRsvps.length > 0 || currentRsvp) {
+            // Fetch event details for other RSVPs
+            var eventCache = {};
+            for (var i = 0; i < otherRsvps.length; i++) {
+                var eid = otherRsvps[i].eventId;
+                if (!eventCache[eid]) {
+                    try {
+                        var eDoc = await db.collection('rsvpEvents').doc(eid).get();
+                        eventCache[eid] = eDoc.exists ? eDoc.data() : null;
+                    } catch (e) {
+                        eventCache[eid] = null;
+                    }
+                }
+            }
+
+            var listHtml = '';
+
+            // Current event RSVP
+            if (currentRsvp) {
+                listHtml +=
+                    '<div class="rsvp-card current">' +
+                        '<div class="rsvp-event-name">' + escapeHtml(currentEvent.name) + '<span class="editing-badge">Current Event</span></div>' +
+                        '<div class="rsvp-details">' +
+                            '<span><strong>Family ID:</strong> ' + escapeHtml(String(currentRsvp.familyId)) + '</span>' +
+                            '<span><strong>Adults:</strong> ' + currentRsvp.adults + '</span>' +
+                            '<span><strong>Kids:</strong> ' + currentRsvp.kids + '</span>' +
+                        '</div>' +
+                    '</div>';
+            }
+
+            // Other events
+            for (var i = 0; i < otherRsvps.length; i++) {
+                var r = otherRsvps[i];
+                var ev = eventCache[r.eventId];
+                if (!ev) continue;
+                listHtml +=
+                    '<div class="rsvp-card">' +
+                        '<div class="rsvp-event-name">' + escapeHtml(ev.name) + '</div>' +
+                        '<div class="rsvp-event-time">&#128197; ' + formatEventTime(ev.eventTime) + '</div>' +
+                        '<div class="rsvp-details">' +
+                            '<span><strong>Family ID:</strong> ' + escapeHtml(String(r.familyId)) + '</span>' +
+                            '<span><strong>Adults:</strong> ' + r.adults + '</span>' +
+                            '<span><strong>Kids:</strong> ' + r.kids + '</span>' +
+                        '</div>' +
+                        '<a class="rsvp-edit-link" href="rsvp.html?id=' + r.eventId + '">Edit this RSVP</a>' +
+                    '</div>';
+            }
+
+            document.getElementById('myRsvpsList').innerHTML = listHtml;
+            document.getElementById('myRsvps').style.display = '';
+        }
+    } catch (err) {
+        console.error('Error loading user RSVPs:', err);
+    }
+}
+
+// Load and cache family.csv data
+var cachedFamilyData = null;
+async function loadFamilyCSV() {
+    if (cachedFamilyData) return cachedFamilyData;
+    var response = await fetch('family.csv?v=' + Date.now());
+    var text = await response.text();
+    var lines = text.split('\n').map(function(l) { return l.trim(); }).filter(function(l) { return l; });
+    if (lines.length < 2) return [];
+
+    // Parse header
+    var headers = lines[0].split(',').map(function(h) { return h.trim().toLowerCase(); });
+    var fidIdx = headers.findIndex(function(h) { return /^(fid|family.?id|familyid)$/.test(h); });
+    var fnIdx = headers.findIndex(function(h) { return /^(first.?name|firstname|first)$/.test(h); });
+    var lnIdx = headers.findIndex(function(h) { return /^(last.?name|lastname|last)$/.test(h); });
+
+    if (fidIdx === -1 || fnIdx === -1 || lnIdx === -1) {
+        console.error('family.csv missing required columns. Found:', headers);
+        return [];
+    }
+
+    cachedFamilyData = [];
+    for (var i = 1; i < lines.length; i++) {
+        var cols = lines[i].split(',').map(function(c) { return c.trim(); });
+        var fid = parseInt(cols[fidIdx]);
+        var fn = cols[fnIdx] || '';
+        var ln = cols[lnIdx] || '';
+        if (!isNaN(fid) && fid > 0 && fn) {
+            cachedFamilyData.push({ fid: fid, firstName: fn, lastName: ln });
+        }
+    }
+    return cachedFamilyData;
+}
+
+function showError(title, message) {
+    var banner = document.getElementById('errorBanner');
+    document.getElementById('errorBannerTitle').textContent = title;
+    document.getElementById('errorBannerMsg').textContent = message;
+    banner.style.display = '';
+    banner.scrollIntoView({ behavior: 'smooth', block: 'center' });
+}
+
+function hideError() {
+    document.getElementById('errorBanner').style.display = 'none';
+}
+
 async function handleSubmit(ev) {
     ev.preventDefault();
-    const btn = document.getElementById('submitBtn');
+    var btn = document.getElementById('submitBtn');
     btn.disabled = true;
-    btn.textContent = 'Submitting...';
+    btn.textContent = editingDocId ? 'Updating...' : 'Submitting...';
 
-    const familyIdRaw = document.getElementById('familyId').value.trim();
-    const familyId = parseInt(familyIdRaw);
+    hideError();
+
+    var familyIdRaw = document.getElementById('familyId').value.trim();
+    var familyId = parseInt(familyIdRaw);
+    var firstName = document.getElementById('firstName').value.trim();
 
     // Validate Family ID is a positive number
     if (!familyIdRaw || isNaN(familyId) || familyId < 1 || !Number.isInteger(familyId)) {
-        alert('Please enter a valid Family ID (must be a positive whole number).');
+        showError('Invalid Family ID', 'Please enter a valid Family ID (must be a positive whole number).');
         btn.disabled = false;
-        btn.textContent = 'Submit RSVP';
+        btn.textContent = editingDocId ? 'Update RSVP' : 'Submit RSVP';
         return;
     }
 
-    // Check if this Family ID already submitted for this event
+    // Validate Family ID, First Name, and Last Name against family.csv
+    var lastName = document.getElementById('lastName').value.trim();
     try {
-        const existing = await db.collection('rsvpResponses')
+        var familyData = await loadFamilyCSV();
+        var familyMembers = familyData.filter(function(m) { return m.fid === familyId; });
+
+        if (familyMembers.length === 0) {
+            showError('Invalid Family ID', 'Family ID ' + familyId + ' was not found in our records. Please check your Family ID and try again.');
+            btn.disabled = false;
+            btn.textContent = editingDocId ? 'Update RSVP' : 'Submit RSVP';
+            return;
+        }
+
+        var nameMatch = familyMembers.some(function(m) {
+            return m.firstName.toLowerCase() === firstName.toLowerCase()
+                && m.lastName.toLowerCase() === lastName.toLowerCase();
+        });
+
+        if (!nameMatch) {
+            showError('Name Mismatch', 'The name "' + firstName + ' ' + lastName + '" does not match any member in Family ID ' + familyId + '. Please check your details and try again.');
+            btn.disabled = false;
+            btn.textContent = editingDocId ? 'Update RSVP' : 'Submit RSVP';
+            return;
+        }
+    } catch (err) {
+        console.error('Error validating family data:', err);
+        // If CSV fetch fails, skip validation so form still works
+    }
+
+    // Check for duplicate Family ID (skip if editing own response)
+    try {
+        var existing = await db.collection('rsvpResponses')
             .where('eventId', '==', eventId)
             .where('familyId', '==', familyId)
             .get();
 
-        if (!existing.empty) {
-            alert('RSVP has already been submitted for this Family ID. Please reach out to admins to make any adjustments.');
+        var isDuplicate = false;
+        existing.forEach(function(doc) {
+            if (doc.id !== editingDocId) isDuplicate = true;
+        });
+
+        if (isDuplicate) {
+            showError('RSVP Already Submitted', 'An RSVP has already been submitted for Family ID ' + familyId + '. Please reach out to the admin to make adjustments.');
             btn.disabled = false;
-            btn.textContent = 'Submit RSVP';
+            btn.textContent = editingDocId ? 'Update RSVP' : 'Submit RSVP';
             return;
         }
     } catch (err) {
         console.error('Error checking duplicate:', err);
     }
 
-    const data = {
+    var data = {
         eventId: eventId,
         firstName: document.getElementById('firstName').value.trim(),
         lastName: document.getElementById('lastName').value.trim(),
         familyId: familyId,
         adults: parseInt(document.getElementById('adults').value),
-        kids: parseInt(document.getElementById('kids').value),
-        submittedAt: firebase.firestore.FieldValue.serverTimestamp()
+        kids: parseInt(document.getElementById('kids').value)
     };
 
+    // Store uid/email if logged in
+    if (currentUser) {
+        data.uid = currentUser.uid;
+        data.email = currentUser.email;
+    }
+
     try {
-        await db.collection('rsvpResponses').add(data);
-        showState('successState');
+        if (editingDocId) {
+            // Update existing RSVP
+            data.updatedAt = firebase.firestore.FieldValue.serverTimestamp();
+            await db.collection('rsvpResponses').doc(editingDocId).update(data);
+            showState('successState');
+            document.querySelector('#successState h2').textContent = 'RSVP Updated!';
+            document.querySelector('#successState p').textContent = 'Your response has been updated successfully.';
+        } else {
+            // Create new RSVP
+            data.submittedAt = firebase.firestore.FieldValue.serverTimestamp();
+            await db.collection('rsvpResponses').add(data);
+            showState('successState');
+            document.querySelector('#successState h2').textContent = 'RSVP Submitted!';
+            document.querySelector('#successState p').textContent = 'Thank you for your response. We look forward to seeing you!';
+        }
     } catch (err) {
         console.error('Submit error:', err);
         alert('Failed to submit. Please try again.');
         btn.disabled = false;
-        btn.textContent = 'Submit RSVP';
+        btn.textContent = editingDocId ? 'Update RSVP' : 'Submit RSVP';
     }
 }
 
@@ -306,7 +583,14 @@ function resetForm() {
     document.getElementById('rsvpForm').reset();
     document.getElementById('submitBtn').disabled = false;
     document.getElementById('submitBtn').textContent = 'Submit RSVP';
+    hideError();
+    editingDocId = null;
+    document.getElementById('formTitle').textContent = 'Your Response';
     showState('mainContent');
+    // Reload user RSVPs if logged in
+    if (currentUser) {
+        loadUserRsvps();
+    }
 }
 
 loadEvent();
