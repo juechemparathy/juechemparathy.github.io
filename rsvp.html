@@ -124,9 +124,7 @@
         <img src="icons/smash-logo.png" alt="SMASH Logo" class="title-icon" />
     </div>
     <h1 class="title-bar">SMASH RSVP</h1>
-    <div class="nav-links">
-        <a href="index.html" class="nav-btn">Schedule</a>
-    </div>
+    <div class="nav-links"></div>
 </header>
 
 <!-- Loading State -->
@@ -170,8 +168,8 @@
                     <input type="text" id="lastName" required placeholder="e.g. Smith" />
                 </div>
                 <div class="form-group full">
-                    <label for="familyId">Family ID <span class="optional">(Optional)</span></label>
-                    <input type="text" id="familyId" placeholder="e.g. FAM-001" />
+                    <label for="familyId">Family ID *</label>
+                    <input type="text" id="familyId" required placeholder="e.g. FAM-001" />
                 </div>
                 <div class="form-group">
                     <label for="adults">Adults</label>
@@ -255,11 +253,30 @@ async function handleSubmit(ev) {
     btn.disabled = true;
     btn.textContent = 'Submitting...';
 
+    const familyId = document.getElementById('familyId').value.trim();
+
+    // Check if this Family ID already submitted for this event
+    try {
+        const existing = await db.collection('rsvpResponses')
+            .where('eventId', '==', eventId)
+            .where('familyId', '==', familyId)
+            .get();
+
+        if (!existing.empty) {
+            alert('RSVP has already been submitted for this Family ID. Please reach out to admins to make any adjustments.');
+            btn.disabled = false;
+            btn.textContent = 'Submit RSVP';
+            return;
+        }
+    } catch (err) {
+        console.error('Error checking duplicate:', err);
+    }
+
     const data = {
         eventId: eventId,
         firstName: document.getElementById('firstName').value.trim(),
         lastName: document.getElementById('lastName').value.trim(),
-        familyId: document.getElementById('familyId').value.trim(),
+        familyId: familyId,
         adults: parseInt(document.getElementById('adults').value),
         kids: parseInt(document.getElementById('kids').value),
         submittedAt: firebase.firestore.FieldValue.serverTimestamp()
