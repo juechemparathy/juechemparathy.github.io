@@ -119,6 +119,7 @@
     <h1 class="title-bar">SMASH Events</h1>
     <div class="nav-links">
         <a href="index.html" class="nav-btn">Schedule</a>
+        <a href="rsvp-admin.html" class="nav-btn admin" id="rsvpAdminLink" style="display:none;">RSVP</a>
         <a href="events-admin.html" class="nav-btn admin" id="adminLink" style="display:none;">Admin</a>
     </div>
 </header>
@@ -170,6 +171,7 @@ const ADMIN_EMAILS = [
 auth.onAuthStateChanged(user => {
     if (user && ADMIN_EMAILS.includes(user.email)) {
         document.getElementById('adminLink').style.display = '';
+        document.getElementById('rsvpAdminLink').style.display = '';
     }
 });
 
