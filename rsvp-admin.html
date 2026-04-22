@@ -333,7 +333,6 @@ let editingId = null;
 let currentViewEventId = null;
 let currentViewEventName = '';
 let currentResponses = [];
-let responseUnsubscribe = null;
 
 function getBaseUrl() {
     return window.location.origin + window.location.pathname.replace(/[^/]*$/, '');
@@ -429,8 +428,9 @@ function loadEvents() {
         list.innerHTML = '';
         snapshot.forEach(doc => {
             const e = doc.data();
-            const url = getRsvpUrl(doc.id);
-            const count = countMap[doc.id] || 0;
+            const id = doc.id;
+            const url = getRsvpUrl(id);
+            const count = countMap[id] || 0;
             const item = document.createElement('div');
             item.className = 'event-item';
             item.innerHTML = `
@@ -442,17 +442,23 @@ function loadEvents() {
                         <span class="response-count">${count} response${count !== 1 ? 's' : ''}</span>
                     </div>
                     <div class="event-actions">
-                        <button class="action-btn view" onclick="viewResponses('${doc.id}', ${JSON.stringify(e.name)})">&#128202; Responses</button>
-                        <button class="action-btn qr" onclick="showQr('${doc.id}', ${JSON.stringify(e.name)})">QR Code</button>
-                        <button class="action-btn" onclick="startEdit('${doc.id}')">&#9998; Edit</button>
-                        <button class="action-btn delete" onclick="deleteEvent('${doc.id}', ${JSON.stringify(e.name)})">&#128465; Delete</button>
+                        <button class="action-btn view" data-action="responses">&#128202; Responses</button>
+                        <button class="action-btn qr" data-action="qr">QR Code</button>
+                        <button class="action-btn" data-action="edit">&#9998; Edit</button>
+                        <button class="action-btn delete" data-action="delete">&#128465; Delete</button>
                     </div>
                 </div>
                 <div class="event-url-bar">
                     <span class="event-url">${escapeHtml(url)}</span>
-                    <button class="copy-btn" onclick="copyUrl('${url}')">Copy Link</button>
+                    <button class="copy-btn" data-action="copy">Copy Link</button>
                 </div>
             `;
+            // Bind click handlers using closures (avoids HTML escaping issues)
+            item.querySelector('[data-action="responses"]').addEventListener('click', () => viewResponses(id, e.name));
+            item.querySelector('[data-action="qr"]').addEventListener('click', () => showQr(id, e.name));
+            item.querySelector('[data-action="edit"]').addEventListener('click', () => startEdit(id));
+            item.querySelector('[data-action="delete"]').addEventListener('click', () => deleteEvent(id, e.name));
+            item.querySelector('[data-action="copy"]').addEventListener('click', () => copyUrl(url));
             list.appendChild(item);
         });
     }, err => {
@@ -580,31 +586,33 @@ function closeQrModal() {
 }
 
 // View Responses
-function viewResponses(eventId, eventName) {
+async function viewResponses(eventId, eventName) {
+    console.log('viewResponses called:', eventId, eventName);
     currentViewEventId = eventId;
     currentViewEventName = eventName;
     document.getElementById('responsesTitle').textContent = 'Responses — ' + eventName;
     document.getElementById('responsesSection').style.display = '';
+    document.getElementById('responsesBody').innerHTML = '<tr><td colspan="7" class="empty-state">Loading responses...</td></tr>';
+    document.getElementById('summaryBar').innerHTML = '';
 
-    // Unsubscribe previous listener
-    if (responseUnsubscribe) responseUnsubscribe();
-
-    responseUnsubscribe = db.collection('rsvpResponses')
-        .where('eventId', '==', eventId)
-        .onSnapshot(snapshot => {
-            currentResponses = [];
-            snapshot.forEach(doc => currentResponses.push({ id: doc.id, ...doc.data() }));
-            // Sort client-side to avoid composite index requirement
-            currentResponses.sort((a, b) => {
-                const ta = a.submittedAt ? (a.submittedAt.toDate ? a.submittedAt.toDate() : new Date(a.submittedAt)) : new Date(0);
-                const tb = b.submittedAt ? (b.submittedAt.toDate ? b.submittedAt.toDate() : new Date(b.submittedAt)) : new Date(0);
-                return tb - ta;
-            });
-            renderResponses();
-        }, err => {
-            console.error('Error loading responses:', err);
-            showToast('Error loading responses. Check console.', 'error');
+    try {
+        console.log('Fetching responses for eventId:', eventId);
+        const snapshot = await db.collection('rsvpResponses').where('eventId', '==', eventId).get();
+        console.log('Responses fetched:', snapshot.size);
+        currentResponses = [];
+        snapshot.forEach(doc => currentResponses.push({ id: doc.id, ...doc.data() }));
+        // Sort client-side
+        currentResponses.sort((a, b) => {
+            const ta = a.submittedAt ? (a.submittedAt.toDate ? a.submittedAt.toDate() : new Date(a.submittedAt)) : new Date(0);
+            const tb = b.submittedAt ? (b.submittedAt.toDate ? b.submittedAt.toDate() : new Date(b.submittedAt)) : new Date(0);
+            return tb - ta;
         });
+        renderResponses();
+    } catch (err) {
+        console.error('Error loading responses:', err);
+        document.getElementById('responsesBody').innerHTML = '<tr><td colspan="7" class="empty-state" style="color:#ef4444;">Error loading responses: ' + escapeHtml(err.message) + '</td></tr>';
+        showToast('Error loading responses. Check console.', 'error');
+    }
 
     document.getElementById('responsesSection').scrollIntoView({ behavior: 'smooth' });
 }
@@ -646,7 +654,6 @@ function renderResponses() {
 }
 
 function closeResponses() {
-    if (responseUnsubscribe) { responseUnsubscribe(); responseUnsubscribe = null; }
     document.getElementById('responsesSection').style.display = 'none';
     currentViewEventId = null;
     currentResponses = [];
