@@ -411,8 +411,13 @@ function loadEvents() {
 
         const countMap = {};
         for (const eid of eventIds) {
-            const snap = await db.collection('rsvpResponses').where('eventId', '==', eid).get();
-            countMap[eid] = snap.size;
+            try {
+                const snap = await db.collection('rsvpResponses').where('eventId', '==', eid).get();
+                countMap[eid] = snap.size;
+            } catch (e) {
+                console.error('Error counting responses for', eid, e);
+                countMap[eid] = 0;
+            }
         }
 
         list.innerHTML = '';
@@ -444,6 +449,10 @@ function loadEvents() {
             `;
             list.appendChild(item);
         });
+    }, err => {
+        console.error('Error loading RSVP events:', err);
+        document.getElementById('eventsList').innerHTML =
+            '<p class="empty-state">Error loading events. Check console for details.</p>';
     });
 }
 
@@ -576,11 +585,19 @@ function viewResponses(eventId, eventName) {
 
     responseUnsubscribe = db.collection('rsvpResponses')
         .where('eventId', '==', eventId)
-        .orderBy('submittedAt', 'desc')
         .onSnapshot(snapshot => {
             currentResponses = [];
             snapshot.forEach(doc => currentResponses.push({ id: doc.id, ...doc.data() }));
+            // Sort client-side to avoid composite index requirement
+            currentResponses.sort((a, b) => {
+                const ta = a.submittedAt ? (a.submittedAt.toDate ? a.submittedAt.toDate() : new Date(a.submittedAt)) : new Date(0);
+                const tb = b.submittedAt ? (b.submittedAt.toDate ? b.submittedAt.toDate() : new Date(b.submittedAt)) : new Date(0);
+                return tb - ta;
+            });
             renderResponses();
+        }, err => {
+            console.error('Error loading responses:', err);
+            showToast('Error loading responses. Check console.', 'error');
         });
 
     document.getElementById('responsesSection').scrollIntoView({ behavior: 'smooth' });
