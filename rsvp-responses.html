@@ -446,6 +446,38 @@ function renderResponses() {
     });
 }
 
+// Load and cache family.csv data
+var cachedFamilyData = null;
+async function loadFamilyCSV() {
+    if (cachedFamilyData) return cachedFamilyData;
+    var response = await fetch('family.csv?v=' + Date.now());
+    var text = await response.text();
+    var lines = text.split('\n').map(function(l) { return l.trim(); }).filter(function(l) { return l; });
+    if (lines.length < 2) return [];
+
+    var headers = lines[0].split(',').map(function(h) { return h.trim().toLowerCase(); });
+    var fidIdx = headers.findIndex(function(h) { return /^(fid|family.?id|familyid)$/.test(h); });
+    var fnIdx = headers.findIndex(function(h) { return /^(first.?name|firstname|first)$/.test(h); });
+    var lnIdx = headers.findIndex(function(h) { return /^(last.?name|lastname|last)$/.test(h); });
+
+    if (fidIdx === -1 || fnIdx === -1 || lnIdx === -1) {
+        console.error('family.csv missing required columns. Found:', headers);
+        return [];
+    }
+
+    cachedFamilyData = [];
+    for (var i = 1; i < lines.length; i++) {
+        var cols = lines[i].split(',').map(function(c) { return c.trim(); });
+        var fid = parseInt(cols[fidIdx]);
+        var fn = cols[fnIdx] || '';
+        var ln = cols[lnIdx] || '';
+        if (!isNaN(fid) && fid > 0 && fn) {
+            cachedFamilyData.push({ fid: fid, firstName: fn, lastName: ln });
+        }
+    }
+    return cachedFamilyData;
+}
+
 // Delete response
 async function deleteResponse(docId, name) {
     if (!confirm('Delete RSVP from "' + name + '"? This cannot be undone.')) return;
@@ -512,8 +544,38 @@ async function saveEdit(ev) {
         return;
     }
 
+    // Validate against family.csv
+    var editFirstName = document.getElementById('editFirstName').value.trim();
+    var editLastName = document.getElementById('editLastName').value.trim();
+    try {
+        var familyData = await loadFamilyCSV();
+        var familyMembers = familyData.filter(function(m) { return m.fid === familyId; });
+
+        if (familyMembers.length === 0) {
+            showToast('Family ID ' + familyId + ' not found in family records.', 'error');
+            btn.disabled = false;
+            btn.textContent = 'Save Changes';
+            return;
+        }
+
+        var nameMatch = familyMembers.some(function(m) {
+            return m.firstName.toLowerCase() === editFirstName.toLowerCase()
+                && m.lastName.toLowerCase() === editLastName.toLowerCase();
+        });
+
+        if (!nameMatch) {
+            showToast('"' + editFirstName + ' ' + editLastName + '" does not match Family ID ' + familyId + '.', 'error');
+            btn.disabled = false;
+            btn.textContent = 'Save Changes';
+            return;
+        }
+    } catch (err) {
+        console.error('Error validating family data:', err);
+        // Skip validation if CSV fetch fails
+    }
+
     var data = {
-        firstName: document.getElementById('editFirstName').value.trim(),
+        firstName: editFirstName,
         lastName: document.getElementById('editLastName').value.trim(),
         familyId: familyId,
         adults: parseInt(document.getElementById('editAdults').value),
