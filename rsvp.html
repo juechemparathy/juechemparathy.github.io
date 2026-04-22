@@ -185,13 +185,9 @@
 
 <!-- Success State -->
 <div id="successState" class="state-message success" style="display:none;">
-    <div class="success-icon" id="successIcon">&#10003;</div>
+    <div class="success-icon">&#10003;</div>
     <h2 id="successTitle">RSVP Submitted!</h2>
     <p id="successMsg">Thank you for your response. We look forward to seeing you!</p>
-    <div id="successWarning" style="display:none; max-width:500px; margin:16px auto; background:#fef3c7; border:1px solid #fcd34d; border-radius:12px; padding:16px 20px; text-align:left;">
-        <div style="font-weight:700; color:#92400e; margin-bottom:6px;" id="warningTitle"></div>
-        <div style="color:#a16207; font-size:0.9rem; line-height:1.5;" id="warningMsg"></div>
-    </div>
     <div class="footer">
         <button class="back-btn" onclick="resetForm()" style="border:none;cursor:pointer;">Submit Another Response</button>
     </div>
@@ -461,16 +457,32 @@ async function loadFamilyCSV() {
     return cachedFamilyData;
 }
 
-function showError(title, message) {
+function showError(title, message, invalidFields) {
     var banner = document.getElementById('errorBanner');
     document.getElementById('errorBannerTitle').textContent = title;
     document.getElementById('errorBannerMsg').textContent = message;
     banner.style.display = '';
+    // Highlight invalid fields
+    clearFieldErrors();
+    if (invalidFields) {
+        invalidFields.forEach(function(id) {
+            var el = document.getElementById(id);
+            if (el) el.style.borderColor = '#ef4444';
+        });
+    }
     banner.scrollIntoView({ behavior: 'smooth', block: 'center' });
 }
 
 function hideError() {
     document.getElementById('errorBanner').style.display = 'none';
+    clearFieldErrors();
+}
+
+function clearFieldErrors() {
+    ['firstName', 'lastName', 'familyId'].forEach(function(id) {
+        var el = document.getElementById(id);
+        if (el) el.style.borderColor = '';
+    });
 }
 
 async function handleSubmit(ev) {
@@ -487,30 +499,51 @@ async function handleSubmit(ev) {
 
     // Validate Family ID is a positive number
     if (!familyIdRaw || isNaN(familyId) || familyId < 1 || !Number.isInteger(familyId)) {
-        showError('Invalid Family ID', 'Please enter a valid Family ID (must be a positive whole number).');
+        showError('Invalid Family ID', 'Please enter a valid Family ID (must be a positive whole number).', ['familyId']);
         btn.disabled = false;
         btn.textContent = editingDocId ? 'Update RSVP' : 'Submit RSVP';
         return;
     }
 
-    // Check Family ID, First Name, and Last Name against family.csv (non-blocking)
+    // Validate Family ID, First Name, and Last Name against family.csv
     var lastName = document.getElementById('lastName').value.trim();
-    var familyWarning = null;
     try {
         var familyData = await loadFamilyCSV();
         if (familyData.length > 0) {
             var familyMembers = familyData.filter(function(m) { return m.fid === familyId; });
 
             if (familyMembers.length === 0) {
-                familyWarning = { title: 'Family ID Not Found', msg: 'Family ID ' + familyId + ' was not found in our records. Please verify your Family ID is correct. If you believe this is an error, please contact the admin.' };
-            } else {
-                var nameMatch = familyMembers.some(function(m) {
-                    return m.firstName.toLowerCase() === firstName.toLowerCase()
-                        && m.lastName.toLowerCase() === lastName.toLowerCase();
-                });
-                if (!nameMatch) {
-                    familyWarning = { title: 'Name Mismatch', msg: 'The name "' + firstName + ' ' + lastName + '" does not match any member in Family ID ' + familyId + '. Please verify your details are correct. If you believe this is an error, please contact the admin.' };
+                showError('Invalid Family ID', 'Family ID ' + familyId + ' was not found in our records. Please check your Family ID and try again.', ['familyId']);
+                btn.disabled = false;
+                btn.textContent = editingDocId ? 'Update RSVP' : 'Submit RSVP';
+                return;
+            }
+
+            // Check which fields don't match
+            var fnMatch = familyMembers.some(function(m) {
+                return m.firstName.toLowerCase() === firstName.toLowerCase();
+            });
+            var lnMatch = familyMembers.some(function(m) {
+                return m.lastName.toLowerCase() === lastName.toLowerCase();
+            });
+            var fullMatch = familyMembers.some(function(m) {
+                return m.firstName.toLowerCase() === firstName.toLowerCase()
+                    && m.lastName.toLowerCase() === lastName.toLowerCase();
+            });
+
+            if (!fullMatch) {
+                var badFields = [];
+                var details = [];
+                if (!fnMatch) { badFields.push('firstName'); details.push('First Name'); }
+                if (!lnMatch) { badFields.push('lastName'); details.push('Last Name'); }
+                if (fnMatch && lnMatch && !fullMatch) {
+                    badFields.push('firstName', 'lastName');
+                    details.push('First Name and Last Name combination');
                 }
+                showError('Data Mismatch', details.join(' and ') + ' does not match any member in Family ID ' + familyId + '. Please check the highlighted field(s) and try again.', badFields);
+                btn.disabled = false;
+                btn.textContent = editingDocId ? 'Update RSVP' : 'Submit RSVP';
+                return;
             }
         }
     } catch (err) {
@@ -571,17 +604,6 @@ async function handleSubmit(ev) {
             document.getElementById('successMsg').textContent = 'Thank you for your response. We look forward to seeing you!';
         }
 
-        // Show warning if family data didn't match
-        var warningEl = document.getElementById('successWarning');
-        if (familyWarning) {
-            document.getElementById('warningTitle').textContent = familyWarning.title;
-            document.getElementById('warningMsg').textContent = familyWarning.msg;
-            warningEl.style.display = '';
-            document.getElementById('successIcon').innerHTML = '&#9888;';
-        } else {
-            warningEl.style.display = 'none';
-            document.getElementById('successIcon').innerHTML = '&#10003;';
-        }
     } catch (err) {
         console.error('Submit error:', err);
         alert('Failed to submit. Please try again.');
@@ -595,8 +617,6 @@ function resetForm() {
     document.getElementById('submitBtn').disabled = false;
     document.getElementById('submitBtn').textContent = 'Submit RSVP';
     hideError();
-    document.getElementById('successWarning').style.display = 'none';
-    document.getElementById('successIcon').innerHTML = '&#10003;';
     editingDocId = null;
     document.getElementById('formTitle').textContent = 'Your Response';
     showState('mainContent');
