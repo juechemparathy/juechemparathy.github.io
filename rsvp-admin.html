@@ -463,7 +463,6 @@ async function deleteEvent(id, name) {
         await batch.commit();
         showToast('Event and responses deleted.');
         if (editingId === id) cancelEdit();
-        if (currentViewEventId === id) closeResponses();
     } catch (err) {
         console.error('Delete error:', err);
         showToast('Failed to delete event.', 'error');
@@ -511,6 +510,7 @@ function closeQrModal() {
 document.getElementById('qrModal').addEventListener('click', function(e) {
     if (e.target === this) closeQrModal();
 });
+
 </script>
 </body>
 </html>
