@@ -484,10 +484,38 @@ async function saveEdit(ev) {
     btn.disabled = true;
     btn.textContent = 'Saving...';
 
+    var familyIdRaw = document.getElementById('editFamilyId').value.trim();
+    var familyId = parseInt(familyIdRaw);
+
+    if (!familyIdRaw || isNaN(familyId) || familyId < 1 || !Number.isInteger(familyId)) {
+        showToast('Family ID must be a positive whole number.', 'error');
+        btn.disabled = false;
+        btn.textContent = 'Save Changes';
+        return;
+    }
+
+    // Check if another response already has this Family ID for this event
+    var existing = await db.collection('rsvpResponses')
+        .where('eventId', '==', eventId)
+        .where('familyId', '==', familyId)
+        .get();
+
+    var isDuplicate = false;
+    existing.forEach(function(doc) {
+        if (doc.id !== editingDocId) isDuplicate = true;
+    });
+
+    if (isDuplicate) {
+        showToast('Another RSVP already exists with this Family ID.', 'error');
+        btn.disabled = false;
+        btn.textContent = 'Save Changes';
+        return;
+    }
+
     var data = {
         firstName: document.getElementById('editFirstName').value.trim(),
         lastName: document.getElementById('editLastName').value.trim(),
-        familyId: document.getElementById('editFamilyId').value.trim(),
+        familyId: familyId,
         adults: parseInt(document.getElementById('editAdults').value),
         kids: parseInt(document.getElementById('editKids').value),
         updatedAt: firebase.firestore.FieldValue.serverTimestamp()
