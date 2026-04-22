@@ -97,17 +97,66 @@
             padding: 14px 16px; text-align: left; font-weight: 600; font-size: 0.82rem;
             text-transform: uppercase; letter-spacing: 0.05em; white-space: nowrap;
         }
-        td { padding: 12px 16px; border-bottom: 1px solid #f3f4f6; font-size: 0.9rem; }
+        td { padding: 12px 16px; border-bottom: 1px solid #f3f4f6; font-size: 0.9rem; vertical-align: middle; }
         tbody tr:hover { background: #f9fafb; }
         tbody tr:last-child td { border-bottom: none; }
+
+        .row-actions { display: flex; gap: 6px; white-space: nowrap; }
+        .row-btn {
+            padding: 5px 10px; border-radius: 6px; border: 1px solid #e5e7eb;
+            background: #fff; cursor: pointer; font-size: 0.8rem; font-weight: 600;
+            transition: all 0.2s;
+        }
+        .row-btn:hover { background: #f3f4f6; }
+        .row-btn.edit { color: #3b82f6; border-color: #93c5fd; }
+        .row-btn.edit:hover { background: #dbeafe; }
+        .row-btn.delete { color: #ef4444; border-color: #fca5a5; }
+        .row-btn.delete:hover { background: #fef2f2; }
 
         .empty-state { text-align: center; padding: 40px; color: #6b7280; font-style: italic; }
         .error-state { text-align: center; padding: 40px; color: #ef4444; font-weight: 600; }
 
+        /* Edit Modal */
+        .modal-overlay {
+            display: none; position: fixed; z-index: 1000; left: 0; top: 0;
+            width: 100%; height: 100%; background: rgba(0,0,0,.5);
+            align-items: center; justify-content: center;
+        }
+        .modal-overlay.show { display: flex; }
+        .modal-box {
+            background: #fff; padding: 28px; border-radius: 16px;
+            max-width: 480px; width: 90%;
+            box-shadow: 0 10px 25px rgba(0,0,0,.2);
+        }
+        .modal-box h3 { margin-bottom: 20px; color: #1e293b; }
+        .modal-close {
+            float: right; font-size: 28px; font-weight: 700; color: #6b7280;
+            cursor: pointer; line-height: 1;
+        }
+        .modal-close:hover { color: #1f2937; }
+        .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+        .form-group { display: flex; flex-direction: column; gap: 4px; }
+        .form-group.full { grid-column: 1 / -1; }
+        .form-group label {
+            font-weight: 600; font-size: 0.82rem; color: #374151;
+            text-transform: uppercase; letter-spacing: 0.03em;
+        }
+        .form-group input, .form-group select {
+            padding: 9px 12px; border: 1px solid #e5e7eb; border-radius: 8px;
+            font-size: 0.95rem; font-family: inherit; transition: border-color 0.2s;
+        }
+        .form-group input:focus, .form-group select:focus {
+            outline: none; border-color: #3b82f6; box-shadow: 0 0 0 3px rgba(59,130,246,0.1);
+        }
+        .modal-actions { display: flex; gap: 10px; margin-top: 20px; justify-content: flex-end; }
+        .btn.primary { background: #3b82f6; color: #fff; border-color: #3b82f6; }
+        .btn.primary:hover { background: #2563eb; }
+        .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
         .toast {
             position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
             padding: 12px 24px; border-radius: 10px; color: #fff; font-weight: 600;
-            z-index: 100; opacity: 0; transition: opacity 0.3s;
+            z-index: 1001; opacity: 0; transition: opacity 0.3s;
         }
         .toast.show { opacity: 1; }
         .toast.success { background: #10b981; }
@@ -116,6 +165,7 @@
         @media (max-width: 640px) {
             .summary-item { min-width: 80px; padding: 10px 14px; }
             .summary-item .value { font-size: 1.3rem; }
+            .form-grid { grid-template-columns: 1fr; }
         }
     </style>
 
@@ -169,14 +219,51 @@
                     <th>Adults</th>
                     <th>Kids</th>
                     <th>Submitted</th>
+                    <th>Actions</th>
                 </tr>
             </thead>
             <tbody id="responsesBody">
-                <tr><td colspan="7" class="empty-state">Loading responses...</td></tr>
+                <tr><td colspan="8" class="empty-state">Loading responses...</td></tr>
             </tbody>
         </table>
     </div>
 </main>
+
+<!-- Edit Response Modal -->
+<div class="modal-overlay" id="editModal">
+    <div class="modal-box">
+        <span class="modal-close" onclick="closeEditModal()">&times;</span>
+        <h3>Edit Response</h3>
+        <form id="editForm" onsubmit="saveEdit(event)">
+            <div class="form-grid">
+                <div class="form-group">
+                    <label for="editFirstName">First Name *</label>
+                    <input type="text" id="editFirstName" required />
+                </div>
+                <div class="form-group">
+                    <label for="editLastName">Last Name *</label>
+                    <input type="text" id="editLastName" required />
+                </div>
+                <div class="form-group full">
+                    <label for="editFamilyId">Family ID *</label>
+                    <input type="number" id="editFamilyId" required min="1" />
+                </div>
+                <div class="form-group">
+                    <label for="editAdults">Adults</label>
+                    <select id="editAdults"></select>
+                </div>
+                <div class="form-group">
+                    <label for="editKids">Kids</label>
+                    <select id="editKids"></select>
+                </div>
+            </div>
+            <div class="modal-actions">
+                <button type="button" class="btn" onclick="closeEditModal()">Cancel</button>
+                <button type="submit" class="btn primary" id="editSaveBtn">Save Changes</button>
+            </div>
+        </form>
+    </div>
+</div>
 
 <div id="toast" class="toast"></div>
 
@@ -193,12 +280,25 @@ const params = new URLSearchParams(window.location.search);
 const eventId = params.get('id');
 let currentResponses = [];
 let eventName = '';
+let editingDocId = null;
+
+// Populate edit dropdowns
+(function() {
+    const adultsSelect = document.getElementById('editAdults');
+    const kidsSelect = document.getElementById('editKids');
+    for (let i = 1; i <= 10; i++) {
+        adultsSelect.innerHTML += '<option value="' + i + '">' + i + '</option>';
+    }
+    for (let i = 0; i <= 10; i++) {
+        kidsSelect.innerHTML += '<option value="' + i + '">' + i + '</option>';
+    }
+})();
 
 function showToast(message, type = 'success') {
     const toast = document.getElementById('toast');
     toast.textContent = message;
-    toast.className = `toast ${type} show`;
-    setTimeout(() => toast.classList.remove('show'), 3000);
+    toast.className = 'toast ' + type + ' show';
+    setTimeout(function() { toast.classList.remove('show'); }, 3000);
 }
 
 function escapeHtml(str) {
@@ -228,13 +328,13 @@ function formatTimestamp(ts) {
 // Auth
 function signIn() {
     const provider = new firebase.auth.GoogleAuthProvider();
-    auth.signInWithPopup(provider).catch(err => {
+    auth.signInWithPopup(provider).catch(function(err) {
         console.error('Sign-in error:', err);
         showToast('Sign-in failed.', 'error');
     });
 }
 
-auth.onAuthStateChanged(user => {
+auth.onAuthStateChanged(function(user) {
     const gate = document.getElementById('authGate');
     const content = document.getElementById('mainContent');
     const denied = document.getElementById('accessDenied');
@@ -268,89 +368,163 @@ async function loadData() {
         const e = eventDoc.data();
         eventName = e.name;
         document.title = 'Responses — ' + eventName;
-        document.getElementById('eventHeader').innerHTML = `
-            <h2>${escapeHtml(e.name)}</h2>
-            <div class="event-time">&#128197; ${formatDateTime(e.eventDate, e.eventTimeStr)}</div>
-        `;
+        document.getElementById('eventHeader').innerHTML =
+            '<h2>' + escapeHtml(e.name) + '</h2>' +
+            '<div class="event-time">&#128197; ' + formatDateTime(e.eventDate, e.eventTimeStr) + '</div>';
     } catch (err) {
         console.error('Error loading event:', err);
         document.getElementById('eventHeader').innerHTML = '<h2 style="color:#ef4444;">Error loading event</h2>';
         return;
     }
 
-    // Load responses
+    await loadResponses();
+}
+
+async function loadResponses() {
     try {
         const snapshot = await db.collection('rsvpResponses').where('eventId', '==', eventId).get();
         currentResponses = [];
-        snapshot.forEach(doc => currentResponses.push({ id: doc.id, ...doc.data() }));
-        currentResponses.sort((a, b) => {
-            const ta = a.submittedAt ? (a.submittedAt.toDate ? a.submittedAt.toDate() : new Date(a.submittedAt)) : new Date(0);
-            const tb = b.submittedAt ? (b.submittedAt.toDate ? b.submittedAt.toDate() : new Date(b.submittedAt)) : new Date(0);
+        snapshot.forEach(function(doc) { currentResponses.push({ id: doc.id, ...doc.data() }); });
+        currentResponses.sort(function(a, b) {
+            var ta = a.submittedAt ? (a.submittedAt.toDate ? a.submittedAt.toDate() : new Date(a.submittedAt)) : new Date(0);
+            var tb = b.submittedAt ? (b.submittedAt.toDate ? b.submittedAt.toDate() : new Date(b.submittedAt)) : new Date(0);
             return tb - ta;
         });
         renderResponses();
     } catch (err) {
         console.error('Error loading responses:', err);
         document.getElementById('responsesBody').innerHTML =
-            '<tr><td colspan="7" class="error-state">Error loading responses: ' + escapeHtml(err.message) + '</td></tr>';
+            '<tr><td colspan="8" class="error-state">Error loading responses: ' + escapeHtml(err.message) + '</td></tr>';
     }
 }
 
 function renderResponses() {
-    const tbody = document.getElementById('responsesBody');
-    const summary = document.getElementById('summaryBar');
-    const countEl = document.getElementById('responseCount');
+    var tbody = document.getElementById('responsesBody');
+    var summary = document.getElementById('summaryBar');
+    var countEl = document.getElementById('responseCount');
 
     if (currentResponses.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="7" class="empty-state">No responses yet.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="8" class="empty-state">No responses yet.</td></tr>';
         summary.innerHTML = '';
         countEl.textContent = 'No responses';
         return;
     }
 
-    let totalAdults = 0, totalKids = 0;
-    currentResponses.forEach(r => {
+    var totalAdults = 0, totalKids = 0;
+    currentResponses.forEach(function(r) {
         totalAdults += r.adults || 0;
         totalKids += r.kids || 0;
     });
 
     countEl.textContent = currentResponses.length + ' Response' + (currentResponses.length !== 1 ? 's' : '');
 
-    summary.innerHTML = `
-        <div class="summary-item"><div class="label">Responses</div><div class="value">${currentResponses.length}</div></div>
-        <div class="summary-item"><div class="label">Total Adults</div><div class="value">${totalAdults}</div></div>
-        <div class="summary-item"><div class="label">Total Kids</div><div class="value">${totalKids}</div></div>
-        <div class="summary-item"><div class="label">Total People</div><div class="value">${totalAdults + totalKids}</div></div>
-    `;
+    summary.innerHTML =
+        '<div class="summary-item"><div class="label">Responses</div><div class="value">' + currentResponses.length + '</div></div>' +
+        '<div class="summary-item"><div class="label">Total Adults</div><div class="value">' + totalAdults + '</div></div>' +
+        '<div class="summary-item"><div class="label">Total Kids</div><div class="value">' + totalKids + '</div></div>' +
+        '<div class="summary-item"><div class="label">Total People</div><div class="value">' + (totalAdults + totalKids) + '</div></div>';
 
-    tbody.innerHTML = currentResponses.map((r, i) => `
-        <tr>
-            <td>${i + 1}</td>
-            <td>${escapeHtml(r.firstName)}</td>
-            <td>${escapeHtml(r.lastName)}</td>
-            <td>${escapeHtml(r.familyId) || '—'}</td>
-            <td>${r.adults}</td>
-            <td>${r.kids}</td>
-            <td>${formatTimestamp(r.submittedAt)}</td>
-        </tr>
-    `).join('');
+    tbody.innerHTML = '';
+    currentResponses.forEach(function(r, i) {
+        var tr = document.createElement('tr');
+        tr.innerHTML =
+            '<td>' + (i + 1) + '</td>' +
+            '<td>' + escapeHtml(r.firstName) + '</td>' +
+            '<td>' + escapeHtml(r.lastName) + '</td>' +
+            '<td>' + (escapeHtml(r.familyId) || '—') + '</td>' +
+            '<td>' + r.adults + '</td>' +
+            '<td>' + r.kids + '</td>' +
+            '<td>' + formatTimestamp(r.submittedAt) + '</td>' +
+            '<td><div class="row-actions">' +
+                '<button class="row-btn edit" data-action="edit">Edit</button>' +
+                '<button class="row-btn delete" data-action="delete">Delete</button>' +
+            '</div></td>';
+
+        tr.querySelector('[data-action="edit"]').addEventListener('click', function() { openEditModal(r); });
+        tr.querySelector('[data-action="delete"]').addEventListener('click', function() { deleteResponse(r.id, r.firstName + ' ' + r.lastName); });
+        tbody.appendChild(tr);
+    });
 }
 
+// Delete response
+async function deleteResponse(docId, name) {
+    if (!confirm('Delete RSVP from "' + name + '"? This cannot be undone.')) return;
+    try {
+        await db.collection('rsvpResponses').doc(docId).delete();
+        showToast('Response deleted.');
+        await loadResponses();
+    } catch (err) {
+        console.error('Delete error:', err);
+        showToast('Failed to delete response.', 'error');
+    }
+}
+
+// Edit modal
+function openEditModal(r) {
+    editingDocId = r.id;
+    document.getElementById('editFirstName').value = r.firstName || '';
+    document.getElementById('editLastName').value = r.lastName || '';
+    document.getElementById('editFamilyId').value = r.familyId || '';
+    document.getElementById('editAdults').value = r.adults || 1;
+    document.getElementById('editKids').value = r.kids || 0;
+    document.getElementById('editModal').classList.add('show');
+}
+
+function closeEditModal() {
+    editingDocId = null;
+    document.getElementById('editModal').classList.remove('show');
+    document.getElementById('editForm').reset();
+}
+
+async function saveEdit(ev) {
+    ev.preventDefault();
+    if (!editingDocId) return;
+
+    var btn = document.getElementById('editSaveBtn');
+    btn.disabled = true;
+    btn.textContent = 'Saving...';
+
+    var data = {
+        firstName: document.getElementById('editFirstName').value.trim(),
+        lastName: document.getElementById('editLastName').value.trim(),
+        familyId: document.getElementById('editFamilyId').value.trim(),
+        adults: parseInt(document.getElementById('editAdults').value),
+        kids: parseInt(document.getElementById('editKids').value),
+        updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+    };
+
+    try {
+        await db.collection('rsvpResponses').doc(editingDocId).update(data);
+        showToast('Response updated!');
+        closeEditModal();
+        await loadResponses();
+    } catch (err) {
+        console.error('Update error:', err);
+        showToast('Failed to update response.', 'error');
+    }
+
+    btn.disabled = false;
+    btn.textContent = 'Save Changes';
+}
+
+// Export to Excel
 function exportToExcel() {
     if (currentResponses.length === 0) return showToast('No responses to export.', 'error');
 
-    const rows = currentResponses.map((r, i) => ({
-        '#': i + 1,
-        'First Name': r.firstName,
-        'Last Name': r.lastName,
-        'Family ID': r.familyId || '',
-        'Adults': r.adults,
-        'Kids': r.kids,
-        'Submitted': formatTimestamp(r.submittedAt)
-    }));
+    var rows = currentResponses.map(function(r, i) {
+        return {
+            '#': i + 1,
+            'First Name': r.firstName,
+            'Last Name': r.lastName,
+            'Family ID': r.familyId || '',
+            'Adults': r.adults,
+            'Kids': r.kids,
+            'Submitted': formatTimestamp(r.submittedAt)
+        };
+    });
 
-    let totalAdults = 0, totalKids = 0;
-    currentResponses.forEach(r => { totalAdults += r.adults || 0; totalKids += r.kids || 0; });
+    var totalAdults = 0, totalKids = 0;
+    currentResponses.forEach(function(r) { totalAdults += r.adults || 0; totalKids += r.kids || 0; });
     rows.push({
         '#': '',
         'First Name': '',
@@ -361,19 +535,24 @@ function exportToExcel() {
         'Submitted': ''
     });
 
-    const ws = XLSX.utils.json_to_sheet(rows);
-    const wb = XLSX.utils.book_new();
+    var ws = XLSX.utils.json_to_sheet(rows);
+    var wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'Responses');
 
-    const colWidths = Object.keys(rows[0]).map(key => ({
-        wch: Math.max(key.length, ...rows.map(r => String(r[key] || '').length)) + 2
-    }));
+    var colWidths = Object.keys(rows[0]).map(function(key) {
+        return { wch: Math.max(key.length, Math.max.apply(null, rows.map(function(r) { return String(r[key] || '').length; }))) + 2 };
+    });
     ws['!cols'] = colWidths;
 
-    const filename = (eventName || 'rsvp').replace(/[^a-zA-Z0-9]/g, '_') + '_responses.xlsx';
+    var filename = (eventName || 'rsvp').replace(/[^a-zA-Z0-9]/g, '_') + '_responses.xlsx';
     XLSX.writeFile(wb, filename);
     showToast('Excel exported!');
 }
+
+// Close modal on outside click
+document.getElementById('editModal').addEventListener('click', function(e) {
+    if (e.target === this) closeEditModal();
+});
 </script>
 </body>
 </html>
