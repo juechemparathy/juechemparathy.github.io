@@ -103,6 +103,18 @@
             color: #b91c1c; font-size: 0.9rem; line-height: 1.5;
         }
 
+        /* Info banner (existing RSVP) */
+        .info-banner {
+            background: #fef3c7; border: 1px solid #fcd34d; border-radius: 12px;
+            padding: 16px 20px; margin-bottom: 24px; display: none;
+        }
+        .info-banner .info-title {
+            font-weight: 700; color: #92400e; font-size: 1rem; margin-bottom: 6px;
+        }
+        .info-banner .info-msg {
+            color: #a16207; font-size: 0.9rem; line-height: 1.5;
+        }
+
         /* States */
         .state-message { text-align: center; padding: 60px 20px; }
         .state-message h2 { margin-bottom: 12px; }
@@ -203,6 +215,12 @@
         <div class="error-msg" id="errorBannerMsg"></div>
     </div>
 
+    <!-- Info banner (existing RSVP) -->
+    <div class="info-banner" id="infoBanner">
+        <div class="info-title">Existing RSVP Found</div>
+        <div class="info-msg">An RSVP has already been submitted for this Family ID. You can update the counts below.</div>
+    </div>
+
     <!-- RSVP Form -->
     <div class="form-card" id="formCard">
         <h3 id="formTitle">Your Response</h3>
@@ -210,15 +228,18 @@
             <div class="form-grid">
                 <div class="form-group">
                     <label for="firstName">First Name *</label>
-                    <input type="text" id="firstName" required placeholder="e.g. John" />
+                    <input type="text" id="firstName" required placeholder="e.g. John" onblur="lookupFamilyId()" />
                 </div>
                 <div class="form-group">
                     <label for="lastName">Last Name *</label>
-                    <input type="text" id="lastName" required placeholder="e.g. Smith" />
+                    <input type="text" id="lastName" required placeholder="e.g. Smith" onblur="lookupFamilyId()" />
                 </div>
                 <div class="form-group full">
                     <label for="familyId">Family ID *</label>
-                    <input type="number" id="familyId" required min="1" placeholder="e.g. 123" />
+                    <select id="familyId" required onchange="onFamilyIdSelected()">
+                        <option value="">Enter your name to find Family ID</option>
+                    </select>
+                    <small id="familyIdHint" style="color:#6b7280; font-size:0.8rem;"></small>
                 </div>
                 <div class="form-group">
                     <label for="adults">Adults</label>
@@ -359,9 +380,13 @@ async function loadUserRsvps() {
             editingDocId = currentRsvp.id;
             document.getElementById('firstName').value = currentRsvp.firstName || '';
             document.getElementById('lastName').value = currentRsvp.lastName || '';
-            document.getElementById('familyId').value = currentRsvp.familyId || '';
+            var select = document.getElementById('familyId');
+            var fid = currentRsvp.familyId || '';
+            select.innerHTML = '<option value="' + fid + '">' + fid + '</option>';
             document.getElementById('adults').value = currentRsvp.adults || 1;
             document.getElementById('kids').value = currentRsvp.kids || 0;
+            enableFormFields(false);
+            showInfo(true);
             document.getElementById('formTitle').textContent = 'Update Your Response';
             document.getElementById('submitBtn').textContent = 'Update RSVP';
         }
@@ -457,32 +482,147 @@ async function loadFamilyCSV() {
     return cachedFamilyData;
 }
 
-function showError(title, message, invalidFields) {
+function showError(title, message) {
     var banner = document.getElementById('errorBanner');
     document.getElementById('errorBannerTitle').textContent = title;
     document.getElementById('errorBannerMsg').textContent = message;
     banner.style.display = 'block';
-    // Highlight invalid fields
-    clearFieldErrors();
-    if (invalidFields) {
-        invalidFields.forEach(function(id) {
-            var el = document.getElementById(id);
-            if (el) el.style.borderColor = '#ef4444';
-        });
-    }
     banner.scrollIntoView({ behavior: 'smooth', block: 'center' });
 }
 
 function hideError() {
     document.getElementById('errorBanner').style.display = 'none';
-    clearFieldErrors();
 }
 
-function clearFieldErrors() {
-    ['firstName', 'lastName', 'familyId'].forEach(function(id) {
-        var el = document.getElementById(id);
-        if (el) el.style.borderColor = '';
-    });
+function showInfo(show) {
+    document.getElementById('infoBanner').style.display = show ? 'block' : 'none';
+}
+
+// Lookup Family ID based on First Name + Last Name
+var lastLookupKey = '';
+async function lookupFamilyId() {
+    var fn = document.getElementById('firstName').value.trim();
+    var ln = document.getElementById('lastName').value.trim();
+    if (!fn || !ln) return;
+
+    var lookupKey = fn.toLowerCase() + '|' + ln.toLowerCase();
+    if (lookupKey === lastLookupKey) return; // avoid duplicate lookups
+    lastLookupKey = lookupKey;
+
+    hideError();
+    showInfo(false);
+
+    var select = document.getElementById('familyId');
+    var hint = document.getElementById('familyIdHint');
+
+    try {
+        var familyData = await loadFamilyCSV();
+        if (familyData.length === 0) {
+            hint.textContent = '';
+            return;
+        }
+
+        // Find matching members (case-insensitive)
+        var matches = familyData.filter(function(m) {
+            return m.firstName.toLowerCase() === fn.toLowerCase()
+                && m.lastName.toLowerCase() === ln.toLowerCase();
+        });
+
+        // Get unique FIDs
+        var fids = [];
+        matches.forEach(function(m) {
+            if (fids.indexOf(m.fid) === -1) fids.push(m.fid);
+        });
+
+        // Reset dropdown
+        select.innerHTML = '';
+        select.disabled = false;
+
+        if (fids.length === 0) {
+            select.innerHTML = '<option value="">No Family ID found</option>';
+            hint.textContent = 'No family found with this name. Please check your name.';
+            hint.style.color = '#ef4444';
+            // Reset any previous editing state
+            editingDocId = null;
+            document.getElementById('formTitle').textContent = 'Your Response';
+            document.getElementById('submitBtn').textContent = 'Submit RSVP';
+        } else if (fids.length === 1) {
+            select.innerHTML = '<option value="' + fids[0] + '">' + fids[0] + '</option>';
+            hint.textContent = '';
+            hint.style.color = '#6b7280';
+            onFamilyIdSelected();
+        } else {
+            select.innerHTML = '<option value="">Select your Family ID</option>';
+            fids.forEach(function(fid) {
+                select.innerHTML += '<option value="' + fid + '">' + fid + '</option>';
+            });
+            hint.textContent = 'Multiple families found. Please select yours.';
+            hint.style.color = '#6b7280';
+            // Reset any previous editing state
+            editingDocId = null;
+            document.getElementById('formTitle').textContent = 'Your Response';
+            document.getElementById('submitBtn').textContent = 'Submit RSVP';
+        }
+    } catch (err) {
+        console.error('Error looking up family:', err);
+        hint.textContent = '';
+    }
+}
+
+// When a Family ID is selected, check for existing RSVP
+async function onFamilyIdSelected() {
+    var select = document.getElementById('familyId');
+    var selectedFid = parseInt(select.value);
+    if (!selectedFid || isNaN(selectedFid)) {
+        showInfo(false);
+        editingDocId = null;
+        enableFormFields(true);
+        document.getElementById('formTitle').textContent = 'Your Response';
+        document.getElementById('submitBtn').textContent = 'Submit RSVP';
+        return;
+    }
+
+    hideError();
+
+    try {
+        var snapshot = await db.collection('rsvpResponses')
+            .where('eventId', '==', eventId)
+            .get();
+
+        var existingDoc = null;
+        snapshot.forEach(function(doc) {
+            if (doc.data().familyId == selectedFid) {
+                existingDoc = { id: doc.id, ...doc.data() };
+            }
+        });
+
+        if (existingDoc) {
+            // Existing RSVP found — offer update
+            showInfo(true);
+            editingDocId = existingDoc.id;
+            document.getElementById('adults').value = existingDoc.adults || 1;
+            document.getElementById('kids').value = existingDoc.kids || 0;
+            enableFormFields(false);
+            document.getElementById('formTitle').textContent = 'Update Response';
+            document.getElementById('submitBtn').textContent = 'Update RSVP';
+        } else {
+            // No existing RSVP
+            showInfo(false);
+            editingDocId = null;
+            enableFormFields(true);
+            document.getElementById('formTitle').textContent = 'Your Response';
+            document.getElementById('submitBtn').textContent = 'Submit RSVP';
+        }
+    } catch (err) {
+        console.error('Error checking existing RSVP:', err);
+    }
+}
+
+function enableFormFields(enabled) {
+    document.getElementById('firstName').disabled = !enabled;
+    document.getElementById('lastName').disabled = !enabled;
+    document.getElementById('familyId').disabled = !enabled;
+    // Adults and Kids are always editable
 }
 
 async function handleSubmit(ev) {
@@ -493,125 +633,48 @@ async function handleSubmit(ev) {
 
     hideError();
 
-    var familyIdRaw = document.getElementById('familyId').value.trim();
-    var familyId = parseInt(familyIdRaw);
-    var firstName = document.getElementById('firstName').value.trim();
+    var familyIdVal = document.getElementById('familyId').value;
+    var familyId = parseInt(familyIdVal);
 
-    // Validate Family ID is a positive number
-    if (!familyIdRaw || isNaN(familyId) || familyId < 1 || !Number.isInteger(familyId)) {
-        showError('Invalid Family ID', 'Please enter a valid Family ID (must be a positive whole number).', ['familyId']);
-        btn.disabled = false;
-        btn.textContent = editingDocId ? 'Update RSVP' : 'Submit RSVP';
-        return;
-    }
-
-    // Validate Family ID, First Name, and Last Name against family.csv
-    var lastName = document.getElementById('lastName').value.trim();
-    try {
-        var familyData = await loadFamilyCSV();
-        if (familyData.length > 0) {
-            var familyMembers = familyData.filter(function(m) { return m.fid === familyId; });
-
-            if (familyMembers.length === 0) {
-                showError('Invalid Family ID', 'Family ID ' + familyId + ' was not found in our records. Please check your Family ID and try again.', ['familyId']);
-                btn.disabled = false;
-                btn.textContent = editingDocId ? 'Update RSVP' : 'Submit RSVP';
-                return;
-            }
-
-            // Check which fields don't match
-            var fnMatch = familyMembers.some(function(m) {
-                return m.firstName.toLowerCase() === firstName.toLowerCase();
-            });
-            var lnMatch = familyMembers.some(function(m) {
-                return m.lastName.toLowerCase() === lastName.toLowerCase();
-            });
-            var fullMatch = familyMembers.some(function(m) {
-                return m.firstName.toLowerCase() === firstName.toLowerCase()
-                    && m.lastName.toLowerCase() === lastName.toLowerCase();
-            });
-
-            if (!fullMatch) {
-                var badFields = [];
-                var details = [];
-                if (!fnMatch) { badFields.push('firstName'); details.push('First Name'); }
-                if (!lnMatch) { badFields.push('lastName'); details.push('Last Name'); }
-                if (fnMatch && lnMatch && !fullMatch) {
-                    badFields.push('firstName', 'lastName');
-                    details.push('First Name and Last Name combination');
-                }
-                showError('Data Mismatch', details.join(' and ') + ' does not match any member in Family ID ' + familyId + '. Please check the highlighted field(s) and try again.', badFields);
-                btn.disabled = false;
-                btn.textContent = editingDocId ? 'Update RSVP' : 'Submit RSVP';
-                return;
-            }
-        }
-    } catch (err) {
-        console.error('Error validating family data:', err);
-    }
-
-    // Check for duplicate Family ID (skip if editing own response)
-    try {
-        var existing = await db.collection('rsvpResponses')
-            .where('eventId', '==', eventId)
-            .get();
-
-        var isDuplicate = false;
-        existing.forEach(function(doc) {
-            if (doc.id !== editingDocId && doc.data().familyId == familyId) {
-                isDuplicate = true;
-            }
-        });
-
-        if (isDuplicate) {
-            showError('RSVP Already Submitted', 'An RSVP has already been submitted for Family ID ' + familyId + '. Please reach out to the admin to make adjustments.', ['familyId']);
-            btn.disabled = false;
-            btn.textContent = editingDocId ? 'Update RSVP' : 'Submit RSVP';
-            return;
-        }
-    } catch (err) {
-        console.error('Error checking duplicate:', err);
-        showError('Validation Error', 'Unable to verify your submission. Please try again.', []);
+    if (!familyIdVal || isNaN(familyId) || familyId < 1) {
+        showError('Family ID Required', 'Please enter your First Name and Last Name to look up your Family ID.');
         btn.disabled = false;
         btn.textContent = editingDocId ? 'Update RSVP' : 'Submit RSVP';
         return;
     }
 
     var data = {
-        eventId: eventId,
-        firstName: document.getElementById('firstName').value.trim(),
-        lastName: document.getElementById('lastName').value.trim(),
-        familyId: familyId,
         adults: parseInt(document.getElementById('adults').value),
-        kids: parseInt(document.getElementById('kids').value)
+        kids: parseInt(document.getElementById('kids').value),
+        updatedAt: firebase.firestore.FieldValue.serverTimestamp()
     };
-
-    // Store uid/email if logged in
-    if (currentUser) {
-        data.uid = currentUser.uid;
-        data.email = currentUser.email;
-    }
 
     try {
         if (editingDocId) {
-            // Update existing RSVP
-            data.updatedAt = firebase.firestore.FieldValue.serverTimestamp();
+            // Update existing RSVP (only adults, kids)
             await db.collection('rsvpResponses').doc(editingDocId).update(data);
             showState('successState');
             document.getElementById('successTitle').textContent = 'RSVP Updated!';
             document.getElementById('successMsg').textContent = 'Your response has been updated successfully.';
         } else {
             // Create new RSVP
+            data.eventId = eventId;
+            data.firstName = document.getElementById('firstName').value.trim();
+            data.lastName = document.getElementById('lastName').value.trim();
+            data.familyId = familyId;
             data.submittedAt = firebase.firestore.FieldValue.serverTimestamp();
+            if (currentUser) {
+                data.uid = currentUser.uid;
+                data.email = currentUser.email;
+            }
             await db.collection('rsvpResponses').add(data);
             showState('successState');
             document.getElementById('successTitle').textContent = 'RSVP Submitted!';
             document.getElementById('successMsg').textContent = 'Thank you for your response. We look forward to seeing you!';
         }
-
     } catch (err) {
         console.error('Submit error:', err);
-        alert('Failed to submit. Please try again.');
+        showError('Submission Failed', 'Failed to submit. Please try again.');
         btn.disabled = false;
         btn.textContent = editingDocId ? 'Update RSVP' : 'Submit RSVP';
     }
@@ -622,10 +685,16 @@ function resetForm() {
     document.getElementById('submitBtn').disabled = false;
     document.getElementById('submitBtn').textContent = 'Submit RSVP';
     hideError();
+    showInfo(false);
+    enableFormFields(true);
     editingDocId = null;
+    lastLookupKey = '';
     document.getElementById('formTitle').textContent = 'Your Response';
+    // Reset family ID dropdown
+    var select = document.getElementById('familyId');
+    select.innerHTML = '<option value="">Enter your name to find Family ID</option>';
+    document.getElementById('familyIdHint').textContent = '';
     showState('mainContent');
-    // Reload user RSVPs if logged in
     if (currentUser) {
         loadUserRsvps();
     }
