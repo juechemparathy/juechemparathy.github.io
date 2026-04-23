@@ -250,15 +250,16 @@
                     <select id="kids"></select>
                 </div>
             </div>
-            <div class="form-actions">
-                <button type="submit" class="submit-btn" id="submitBtn">Submit RSVP</button>
+            <div class="form-actions" style="display:flex; gap:10px;">
+                <button type="button" class="submit-btn" id="deleteBtn" style="display:none; background:#ef4444; box-shadow:0 4px 12px rgba(239,68,68,0.4);" onclick="deleteRsvp()">Delete RSVP</button>
+                <button type="submit" class="submit-btn" id="submitBtn" style="flex:1;">Submit RSVP</button>
             </div>
         </form>
     </div>
 
     <!-- My RSVPs (shown when logged in) -->
     <div class="my-rsvps" id="myRsvps">
-        <h3>Your RSVPs</h3>
+        <h3>Events You're Attending</h3>
         <div id="myRsvpsList"></div>
     </div>
 </main>
@@ -361,75 +362,86 @@ async function loadEvent() {
     }
 }
 
-// Load user's RSVPs (current event + other events)
+// Load user's RSVPs — match by first/last name from Google profile against family.csv
 async function loadUserRsvps() {
     if (!currentUser) return;
 
     try {
-        var snapshot = await db.collection('rsvpResponses')
-            .where('uid', '==', currentUser.uid)
-            .get();
+        // Get user's first and last name from Google display name
+        var displayName = currentUser.displayName || '';
+        var parts = displayName.trim().split(/\s+/);
+        if (parts.length < 2) {
+            document.getElementById('myRsvps').style.display = 'none';
+            return;
+        }
+        var userFirst = parts[0];
+        var userLast = parts.slice(1).join(' ');
 
+        // Find matching Family IDs from CSV
+        var familyData = await loadFamilyCSV();
+        var matchingFids = [];
+        familyData.forEach(function(m) {
+            if (m.firstName.toLowerCase() === userFirst.toLowerCase()
+                && m.lastName.toLowerCase() === userLast.toLowerCase()
+                && matchingFids.indexOf(m.fid) === -1) {
+                matchingFids.push(m.fid);
+            }
+        });
+
+        if (matchingFids.length === 0) {
+            document.getElementById('myRsvps').style.display = 'none';
+            return;
+        }
+
+        // Find all RSVPs matching those Family IDs
+        var allResponses = await db.collection('rsvpResponses').get();
         var myRsvps = [];
-        snapshot.forEach(function(doc) { myRsvps.push({ id: doc.id, ...doc.data() }); });
+        allResponses.forEach(function(doc) {
+            var d = doc.data();
+            if (matchingFids.indexOf(d.familyId) !== -1 || matchingFids.some(function(fid) { return fid == d.familyId; })) {
+                myRsvps.push({ id: doc.id, ...d });
+            }
+        });
 
-        // Check if user has RSVP for current event
-        var currentRsvp = myRsvps.find(function(r) { return r.eventId === eventId; });
-        // Don't pre-fill or lock form — anyone can submit/update for any family ID
+        if (myRsvps.length === 0) {
+            document.getElementById('myRsvps').style.display = 'none';
+            return;
+        }
 
-        // Show RSVPs for other events
-        var otherRsvps = myRsvps.filter(function(r) { return r.eventId !== eventId; });
-        if (otherRsvps.length > 0 || currentRsvp) {
-            // Fetch event details for other RSVPs
-            var eventCache = {};
-            for (var i = 0; i < otherRsvps.length; i++) {
-                var eid = otherRsvps[i].eventId;
-                if (!eventCache[eid]) {
-                    try {
-                        var eDoc = await db.collection('rsvpEvents').doc(eid).get();
-                        eventCache[eid] = eDoc.exists ? eDoc.data() : null;
-                    } catch (e) {
-                        eventCache[eid] = null;
-                    }
+        // Fetch event details
+        var eventCache = {};
+        for (var i = 0; i < myRsvps.length; i++) {
+            var eid = myRsvps[i].eventId;
+            if (!eventCache[eid]) {
+                try {
+                    var eDoc = await db.collection('rsvpEvents').doc(eid).get();
+                    eventCache[eid] = eDoc.exists ? eDoc.data() : null;
+                } catch (e) {
+                    eventCache[eid] = null;
                 }
             }
-
-            var listHtml = '';
-
-            // Current event RSVP
-            if (currentRsvp) {
-                listHtml +=
-                    '<div class="rsvp-card current">' +
-                        '<div class="rsvp-event-name">' + escapeHtml(currentEvent.name) + '<span class="editing-badge">Current Event</span></div>' +
-                        '<div class="rsvp-details">' +
-                            '<span><strong>Family ID:</strong> ' + escapeHtml(String(currentRsvp.familyId)) + '</span>' +
-                            '<span><strong>Adults:</strong> ' + currentRsvp.adults + '</span>' +
-                            '<span><strong>Kids:</strong> ' + currentRsvp.kids + '</span>' +
-                        '</div>' +
-                    '</div>';
-            }
-
-            // Other events
-            for (var i = 0; i < otherRsvps.length; i++) {
-                var r = otherRsvps[i];
-                var ev = eventCache[r.eventId];
-                if (!ev) continue;
-                listHtml +=
-                    '<div class="rsvp-card">' +
-                        '<div class="rsvp-event-name">' + escapeHtml(ev.name) + '</div>' +
-                        '<div class="rsvp-event-time">&#128197; ' + formatEventTime(ev.eventTime) + '</div>' +
-                        '<div class="rsvp-details">' +
-                            '<span><strong>Family ID:</strong> ' + escapeHtml(String(r.familyId)) + '</span>' +
-                            '<span><strong>Adults:</strong> ' + r.adults + '</span>' +
-                            '<span><strong>Kids:</strong> ' + r.kids + '</span>' +
-                        '</div>' +
-                        '<a class="rsvp-edit-link" href="rsvp.html?id=' + r.eventId + '">Edit this RSVP</a>' +
-                    '</div>';
-            }
-
-            document.getElementById('myRsvpsList').innerHTML = listHtml;
-            document.getElementById('myRsvps').style.display = '';
         }
+
+        var listHtml = '';
+        myRsvps.forEach(function(r) {
+            var ev = eventCache[r.eventId];
+            if (!ev) return;
+            var isCurrent = r.eventId === eventId;
+            listHtml +=
+                '<div class="rsvp-card' + (isCurrent ? ' current' : '') + '">' +
+                    '<div class="rsvp-event-name">' + escapeHtml(ev.name) + (isCurrent ? '<span class="editing-badge">Current Event</span>' : '') + '</div>' +
+                    (isCurrent ? '' : '<div class="rsvp-event-time">&#128197; ' + formatEventTime(ev.eventTime) + '</div>') +
+                    '<div class="rsvp-details">' +
+                        '<span><strong>Family ID:</strong> ' + escapeHtml(String(r.familyId)) + '</span>' +
+                        '<span><strong>Adults:</strong> ' + r.adults + '</span>' +
+                        '<span><strong>Kids:</strong> ' + r.kids + '</span>' +
+                    '</div>' +
+                    (isCurrent ? '' : '<a class="rsvp-edit-link" href="rsvp.html?id=' + r.eventId + '">Edit this RSVP</a>') +
+                '</div>';
+        });
+
+        document.getElementById('myRsvpsList').innerHTML = listHtml;
+        document.getElementById('myRsvps').style.display = '';
     } catch (err) {
         console.error('Error loading user RSVPs:', err);
     }
@@ -530,6 +542,8 @@ async function lookupFamilyId() {
             hint.style.color = '#ef4444';
             // Reset any previous editing state
             editingDocId = null;
+            showInfo(false);
+            document.getElementById('deleteBtn').style.display = 'none';
             document.getElementById('formTitle').textContent = 'Your Response';
             document.getElementById('submitBtn').textContent = 'Submit RSVP';
         } else if (fids.length === 1) {
@@ -546,6 +560,8 @@ async function lookupFamilyId() {
             hint.style.color = '#6b7280';
             // Reset any previous editing state
             editingDocId = null;
+            showInfo(false);
+            document.getElementById('deleteBtn').style.display = 'none';
             document.getElementById('formTitle').textContent = 'Your Response';
             document.getElementById('submitBtn').textContent = 'Submit RSVP';
         }
@@ -563,6 +579,7 @@ async function onFamilyIdSelected() {
         showInfo(false);
         editingDocId = null;
         enableFormFields(true);
+        document.getElementById('deleteBtn').style.display = 'none';
         document.getElementById('formTitle').textContent = 'Your Response';
         document.getElementById('submitBtn').textContent = 'Submit RSVP';
         return;
@@ -591,6 +608,7 @@ async function onFamilyIdSelected() {
             enableFormFields(false);
             document.getElementById('formTitle').textContent = 'Update Response';
             document.getElementById('submitBtn').textContent = 'Update RSVP';
+            document.getElementById('deleteBtn').style.display = '';
         } else {
             // No existing RSVP
             showInfo(false);
@@ -598,6 +616,7 @@ async function onFamilyIdSelected() {
             enableFormFields(true);
             document.getElementById('formTitle').textContent = 'Your Response';
             document.getElementById('submitBtn').textContent = 'Submit RSVP';
+            document.getElementById('deleteBtn').style.display = 'none';
         }
     } catch (err) {
         console.error('Error checking existing RSVP:', err);
@@ -651,6 +670,7 @@ async function handleSubmit(ev) {
                 enableFormFields(false);
                 showInfo(true);
                 document.getElementById('formTitle').textContent = 'Update Response';
+                document.getElementById('deleteBtn').style.display = '';
                 btn.disabled = false;
                 btn.textContent = 'Update RSVP';
                 return; // Don't submit yet — let user review and update counts
@@ -702,6 +722,21 @@ async function handleSubmit(ev) {
     }
 }
 
+async function deleteRsvp() {
+    if (!editingDocId) return;
+    if (!confirm('Are you sure you want to delete this RSVP?')) return;
+
+    try {
+        await db.collection('rsvpResponses').doc(editingDocId).delete();
+        showState('successState');
+        document.getElementById('successTitle').textContent = 'RSVP Deleted';
+        document.getElementById('successMsg').textContent = 'Your RSVP has been removed successfully.';
+    } catch (err) {
+        console.error('Delete error:', err);
+        showError('Delete Failed', 'Failed to delete RSVP. Please try again.');
+    }
+}
+
 function resetForm() {
     document.getElementById('rsvpForm').reset();
     document.getElementById('submitBtn').disabled = false;
@@ -709,6 +744,7 @@ function resetForm() {
     hideError();
     showInfo(false);
     enableFormFields(true);
+    document.getElementById('deleteBtn').style.display = 'none';
     editingDocId = null;
     lastLookupKey = '';
     document.getElementById('formTitle').textContent = 'Your Response';
