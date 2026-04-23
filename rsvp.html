@@ -173,9 +173,9 @@
 </head>
 <body>
 <header class="topbar">
-    <div class="brand">
+    <a class="brand" href="https://syrosmash.com">
         <img src="icons/smash-logo.png" alt="SMASH Logo" class="title-icon" />
-    </div>
+    </a>
     <h1 class="title-bar">SMASH RSVP</h1>
     <div class="nav-links">
         <div id="authArea">
@@ -251,7 +251,7 @@
                 </div>
             </div>
             <div class="form-actions" style="display:flex; gap:10px;">
-                <button type="button" class="submit-btn" id="deleteBtn" style="display:none; background:#ef4444; box-shadow:0 4px 12px rgba(239,68,68,0.4);" onclick="deleteRsvp()">Delete RSVP</button>
+                <button type="button" id="deleteBtn" style="display:none; background:#ef4444; color:#fff; border:none; border-radius:8px; padding:10px 14px; font-size:0.85rem; font-weight:600; cursor:pointer;" onclick="deleteRsvp()">Delete</button>
                 <button type="submit" class="submit-btn" id="submitBtn" style="flex:1;">Submit RSVP</button>
             </div>
         </form>
@@ -362,43 +362,47 @@ async function loadEvent() {
     }
 }
 
-// Load user's RSVPs — match by first/last name from Google profile against family.csv
+// Load user's RSVPs — match by name from Google profile
 async function loadUserRsvps() {
     if (!currentUser) return;
 
     try {
-        // Get user's first and last name from Google display name
         var displayName = currentUser.displayName || '';
         var parts = displayName.trim().split(/\s+/);
         if (parts.length < 2) {
             document.getElementById('myRsvps').style.display = 'none';
             return;
         }
-        var userFirst = parts[0];
-        var userLast = parts.slice(1).join(' ');
+        var userFirst = parts[0].toLowerCase();
+        var userLast = parts.slice(1).join(' ').toLowerCase();
 
         // Find matching Family IDs from CSV
-        var familyData = await loadFamilyCSV();
         var matchingFids = [];
-        familyData.forEach(function(m) {
-            if (m.firstName.toLowerCase() === userFirst.toLowerCase()
-                && m.lastName.toLowerCase() === userLast.toLowerCase()
-                && matchingFids.indexOf(m.fid) === -1) {
-                matchingFids.push(m.fid);
-            }
-        });
-
-        if (matchingFids.length === 0) {
-            document.getElementById('myRsvps').style.display = 'none';
-            return;
+        try {
+            var familyData = await loadFamilyCSV();
+            familyData.forEach(function(m) {
+                if (m.firstName.toLowerCase() === userFirst
+                    && m.lastName.toLowerCase() === userLast
+                    && matchingFids.indexOf(m.fid) === -1) {
+                    matchingFids.push(m.fid);
+                }
+            });
+        } catch (e) {
+            console.error('CSV load error:', e);
         }
 
-        // Find all RSVPs matching those Family IDs
+        // Find all RSVPs matching by Family ID OR by firstName+lastName in responses
         var allResponses = await db.collection('rsvpResponses').get();
         var myRsvps = [];
+        var seenIds = {};
         allResponses.forEach(function(doc) {
             var d = doc.data();
-            if (matchingFids.indexOf(d.familyId) !== -1 || matchingFids.some(function(fid) { return fid == d.familyId; })) {
+            var fidMatch = matchingFids.some(function(fid) { return fid == d.familyId; });
+            var nameMatch = d.firstName && d.lastName
+                && d.firstName.toLowerCase() === userFirst
+                && d.lastName.toLowerCase() === userLast;
+            if ((fidMatch || nameMatch) && !seenIds[doc.id]) {
+                seenIds[doc.id] = true;
                 myRsvps.push({ id: doc.id, ...d });
             }
         });
