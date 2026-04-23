@@ -375,21 +375,7 @@ async function loadUserRsvps() {
 
         // Check if user has RSVP for current event
         var currentRsvp = myRsvps.find(function(r) { return r.eventId === eventId; });
-        if (currentRsvp) {
-            // Pre-fill form for editing
-            editingDocId = currentRsvp.id;
-            document.getElementById('firstName').value = currentRsvp.firstName || '';
-            document.getElementById('lastName').value = currentRsvp.lastName || '';
-            var select = document.getElementById('familyId');
-            var fid = currentRsvp.familyId || '';
-            select.innerHTML = '<option value="' + fid + '">' + fid + '</option>';
-            document.getElementById('adults').value = currentRsvp.adults || 1;
-            document.getElementById('kids').value = currentRsvp.kids || 0;
-            enableFormFields(false);
-            showInfo(true);
-            document.getElementById('formTitle').textContent = 'Update Your Response';
-            document.getElementById('submitBtn').textContent = 'Update RSVP';
-        }
+        // Don't pre-fill or lock form — anyone can submit/update for any family ID
 
         // Show RSVPs for other events
         var otherRsvps = myRsvps.filter(function(r) { return r.eventId !== eventId; });
@@ -679,6 +665,11 @@ async function handleSubmit(ev) {
         kids: parseInt(document.getElementById('kids').value),
         updatedAt: firebase.firestore.FieldValue.serverTimestamp()
     };
+
+    // Record who is updating if logged in
+    if (currentUser) {
+        data.updatedBy = currentUser.email;
+    }
 
     try {
         if (editingDocId) {
