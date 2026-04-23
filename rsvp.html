@@ -643,6 +643,37 @@ async function handleSubmit(ev) {
         return;
     }
 
+    // If not already in edit mode, check for existing RSVP on submit
+    if (!editingDocId) {
+        try {
+            var snapshot = await db.collection('rsvpResponses')
+                .where('eventId', '==', eventId)
+                .get();
+
+            var existingDoc = null;
+            snapshot.forEach(function(doc) {
+                if (doc.data().familyId == familyId) {
+                    existingDoc = { id: doc.id, ...doc.data() };
+                }
+            });
+
+            if (existingDoc) {
+                // Existing RSVP found — switch to update mode
+                editingDocId = existingDoc.id;
+                document.getElementById('adults').value = existingDoc.adults || 1;
+                document.getElementById('kids').value = existingDoc.kids || 0;
+                enableFormFields(false);
+                showInfo(true);
+                document.getElementById('formTitle').textContent = 'Update Response';
+                btn.disabled = false;
+                btn.textContent = 'Update RSVP';
+                return; // Don't submit yet — let user review and update counts
+            }
+        } catch (err) {
+            console.error('Error checking existing RSVP:', err);
+        }
+    }
+
     var data = {
         adults: parseInt(document.getElementById('adults').value),
         kids: parseInt(document.getElementById('kids').value),
