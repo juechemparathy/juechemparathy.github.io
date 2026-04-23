@@ -461,7 +461,7 @@ function showError(title, message, invalidFields) {
     var banner = document.getElementById('errorBanner');
     document.getElementById('errorBannerTitle').textContent = title;
     document.getElementById('errorBannerMsg').textContent = message;
-    banner.style.display = '';
+    banner.style.display = 'block';
     // Highlight invalid fields
     clearFieldErrors();
     if (invalidFields) {
