@@ -1002,12 +1002,12 @@ function renderSportContent() {
         empty.textContent = `No ${selectedSport} games.`;
         track.appendChild(empty);
       } else {
-        matching.forEach(entry => track.appendChild(renderSlotCard(entry.slot, entry.prio)));
+        appendToTrack(track, matching);
       }
 
       daySection.appendChild(track);
     }
-    
+
     tabContent.appendChild(daySection);
   });
 }
@@ -1078,11 +1078,10 @@ function renderMyGamesContent() {
     if (!isDayBlocked(dayIndex)) {
       const track = document.createElement("div");
       track.className = "slot-track";
-      entries.forEach(entry => track.appendChild(renderSlotCard(entry.slot, entry.prio)));
-
+      appendToTrack(track, entries);
       daySection.appendChild(track);
     }
-    
+
     tabContent.appendChild(daySection);
   });
 
@@ -1148,11 +1147,10 @@ function renderAllGamesContent() {
     if (!isDayBlocked(dayIndex)) {
       const track = document.createElement("div");
       track.className = "slot-track";
-      entries.forEach(entry => track.appendChild(renderSlotCard(entry.slot, entry.prio)));
-
+      appendToTrack(track, entries);
       daySection.appendChild(track);
     }
-    
+
     tabContent.appendChild(daySection);
   });
 
@@ -1185,53 +1183,57 @@ function renderSlotCard(slot, prio) {
 
   const top = document.createElement("div");
   top.className = "slot-time";
-  top.innerHTML = `
-    <span>${block?.label ?? slot.blockId}</span>
-    <span class="priority-pill ${prio === 0 ? "p0" : "p1"}">${prio === 0 ? "P0" : "P1"}</span>
-  `;
+  top.innerHTML = `<span>${block?.label ?? slot.blockId}</span>`;
   
-  // Add buttons next to priority pill
+  const ICON = {
+    share:   `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="22" x2="11" y1="2" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>`,
+    block:   `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="4.93" x2="19.07" y1="4.93" y2="19.07"/></svg>`,
+    unblock: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></svg>`,
+    guest:   `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>`,
+    join:    `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="19" x2="19" y1="8" y2="14"/><line x1="22" x2="16" y1="11" y2="11"/></svg>`,
+    joined:  `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><polyline points="16 11 18 13 22 9"/></svg>`,
+    leave:   `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" x2="9" y1="12" y2="12"/></svg>`,
+  };
+
+  // Action buttons row
   const buttonContainer = document.createElement("div");
   buttonContainer.style.display = "flex";
-  buttonContainer.style.gap = "4px";
+  buttonContainer.style.gap = "8px";
   buttonContainer.style.alignItems = "center";
-  
+
   // Share button (always visible)
   const shareBtn = document.createElement("button");
   shareBtn.className = "btn share-btn-top";
-  shareBtn.innerHTML = `
-                         <img src="icons/whatsapp-icon.ico" alt="Share" class="share-icon">
-                       `;
+  shareBtn.innerHTML = ICON.share;
   shareBtn.title = "Share on WhatsApp";
   shareBtn.onclick = () => shareSlotOnWhatsApp(slot, prio, p, block);
   buttonContainer.appendChild(shareBtn);
-  
+
   // Block/Unblock button (admin only)
   if (isAdmin && p.sport !== "No Games") {
     const blockSlotBtn = document.createElement("button");
     blockSlotBtn.className = slotBlocked ? "btn unblock-btn-top" : "btn block-btn-top";
-    blockSlotBtn.innerHTML = slotBlocked ? "✓" : "🚫";
+    blockSlotBtn.innerHTML = slotBlocked ? ICON.unblock : ICON.block;
     blockSlotBtn.title = slotBlocked ? "Unblock this slot" : "Block this slot";
     blockSlotBtn.onclick = () => toggleBlockSlot(slot.id, prio, slot, p, !slotBlocked);
     buttonContainer.appendChild(blockSlotBtn);
   }
-  
+
   // Guest button (conditional)
   if (canAddGuest && !slotBlocked) {
     const addGuestBtn = document.createElement("button");
     addGuestBtn.className = "btn guest-btn-top";
-    addGuestBtn.innerHTML = "👥";
+    addGuestBtn.innerHTML = ICON.guest;
     addGuestBtn.title = "Add Guest";
     addGuestBtn.onclick = () => showGuestModal(slot.id, prio);
     buttonContainer.appendChild(addGuestBtn);
   }
   
-  top.appendChild(buttonContainer);
   card.appendChild(top);
 
   const sportTag = document.createElement("div");
   sportTag.className = "sport-tag";
-  sportTag.textContent = p.sport;
+  sportTag.innerHTML = `<span class="priority-pill ${prio === 0 ? "p0" : "p1"}">${prio === 0 ? "P0" : "P1"}</span><span>${p.sport}</span>`;
   card.appendChild(sportTag);
   
   // Show blocked slot notice if individual slot is blocked
@@ -1260,51 +1262,48 @@ function renderSlotCard(slot, prio) {
   const playersList = document.createElement("div");
   playersList.className = "players";
   
-  if ((p.players || []).length === 0) {
+  const allPlayers = p.players || [];
+  if (allPlayers.length === 0) {
     const empty = document.createElement("span");
     empty.className = "empty";
     empty.textContent = "No players yet";
     playersList.appendChild(empty);
   } else {
-    (p.players || []).forEach((pl, index) => {
-      const playerWrapper = document.createElement("span");
-      playerWrapper.className = "player-wrapper";
-      
-      const chip = document.createElement("span");
-      // Add waiting-list class if player is beyond mainLimit
-      if (index >= mainLimit) {
-        chip.className = "player waiting-list";
-      } else {
-        chip.className = "player";
-      }
-      // Add asterisk for guest players
-      const displayName = pl.isGuest ? `*${toCamelCase(pl.name)}` : toCamelCase(pl.name);
-      chip.textContent = displayName;
-      
-      // Add title tooltip for guest players
-      if (pl.isGuest) {
-        chip.title = `Guest - Parishioner: ${pl.parishionerName || 'N/A'}, Family ID: ${pl.familyId || 'N/A'}`;
-      }
-      
-      playerWrapper.appendChild(chip);
-      
-      // Add remove button for guest players (admin only)
-      if (pl.isGuest && isAdmin) {
-        const removeBtn = document.createElement("span");
-        removeBtn.className = "remove-guest";
-        removeBtn.textContent = "×";
-        removeBtn.title = "Remove guest player";
-        removeBtn.onclick = (e) => {
-          e.stopPropagation();
-          if (confirm(`Remove guest player ${pl.name}?`)) {
-            removeGuest(slot.id, prio, pl.uid);
-          }
-        };
-        playerWrapper.appendChild(removeBtn);
-      }
-      
-      playersList.appendChild(playerWrapper);
-    });
+    // Render in explicit rows of 4
+    for (let rowStart = 0; rowStart < allPlayers.length; rowStart += 4) {
+      const rowEl = document.createElement("div");
+      rowEl.className = "player-row";
+
+      allPlayers.slice(rowStart, rowStart + 4).forEach((pl, i) => {
+        const index = rowStart + i;
+        const playerWrapper = document.createElement("span");
+        playerWrapper.className = "player-wrapper";
+
+        const chip = document.createElement("span");
+        chip.className = index >= mainLimit ? "player waiting-list" : "player";
+        chip.textContent = pl.isGuest ? `*${toCamelCase(pl.name)}` : toCamelCase(pl.name);
+        if (pl.isGuest) {
+          chip.title = `Guest - Parishioner: ${pl.parishionerName || 'N/A'}, Family ID: ${pl.familyId || 'N/A'}`;
+        }
+        playerWrapper.appendChild(chip);
+
+        if (pl.isGuest && isAdmin) {
+          const removeBtn = document.createElement("span");
+          removeBtn.className = "remove-guest";
+          removeBtn.textContent = "×";
+          removeBtn.title = "Remove guest player";
+          removeBtn.onclick = (e) => {
+            e.stopPropagation();
+            if (confirm(`Remove guest player ${pl.name}?`)) removeGuest(slot.id, prio, pl.uid);
+          };
+          playerWrapper.appendChild(removeBtn);
+        }
+
+        rowEl.appendChild(playerWrapper);
+      });
+
+      playersList.appendChild(rowEl);
+    }
   }
   card.appendChild(playersList);
 
@@ -1318,14 +1317,14 @@ function renderSlotCard(slot, prio) {
 
   const joinBtn = document.createElement("button");
   joinBtn.className = "btn primary";
-  joinBtn.innerHTML = isIn ? "✓" : "➕";
+  joinBtn.innerHTML = isIn ? ICON.joined : ICON.join;
   joinBtn.title = blocked ? "Slot is blocked" : (isIn ? "Joined" : "Join");
   joinBtn.disabled = !currentUser || isIn || !canJoin || blocked;
   joinBtn.onclick = () => updateSignup(slot.id, prio, "join");
 
   const leaveBtn = document.createElement("button");
   leaveBtn.className = "btn";
-  leaveBtn.innerHTML = "➖";
+  leaveBtn.innerHTML = ICON.leave;
   leaveBtn.title = blocked ? "Slot is blocked" : "Leave";
   leaveBtn.disabled = !currentUser || !isIn || blocked;
   leaveBtn.onclick = () => updateSignup(slot.id, prio, "leave");
@@ -1334,8 +1333,222 @@ function renderSlotCard(slot, prio) {
   btnbar.appendChild(leaveBtn);
 
   card.appendChild(btnbar);
+  card.appendChild(buttonContainer);
 
   return card;
+}
+
+function appendToTrack(track, entries) {
+  // Group entries by slot.id so P0 + P1 of the same slot share a wrapper
+  const seen = new Map();
+  entries.forEach(e => {
+    if (!seen.has(e.slot.id)) seen.set(e.slot.id, []);
+    seen.get(e.slot.id).push(e);
+  });
+  seen.forEach(slotEntries => {
+    if (slotEntries.length === 1) {
+      track.appendChild(renderSlotCard(slotEntries[0].slot, slotEntries[0].prio));
+    } else {
+      const pair = document.createElement("div");
+      pair.className = "slot-pair";
+      const pairBlock = TIME_BLOCKS.find(b => b.id === slotEntries[0].slot.blockId);
+      const pairHeader = document.createElement("div");
+      pairHeader.className = "slot-pair-header";
+      pairHeader.textContent = pairBlock?.label ?? slotEntries[0].slot.blockId;
+      pair.appendChild(pairHeader);
+      slotEntries.forEach(e => pair.appendChild(renderSlotCard(e.slot, e.prio)));
+      track.appendChild(pair);
+    }
+  });
+}
+
+function renderSlotRow(slot, prio) {
+  const p = slot[`p${prio}`] || { sport: "No Games", players: [] };
+  const meta = SPORT_META[normalizeSportName(p.sport)] || { min: 0, max: 20, mainLimit: 10, waitingList: 10 };
+  const block = TIME_BLOCKS.find(b => b.id === slot.blockId);
+  const active = computeActivePriority(slot) === prio;
+  const dayBlocked = isDayBlocked(slot.dayIndex);
+  const slotBlocked = isSlotBlocked(slot.id, prio);
+  const isAdmin = currentUser && ADMIN_EMAILS.includes(currentUser.email);
+  const blocked = dayBlocked || slotBlocked;
+
+  const mainLimit = meta.mainLimit || 10;
+  const maxPlayers = meta.max || 20;
+  const players = p.players || [];
+  const totalPlayers = players.length;
+  const mainPlayers = Math.min(totalPlayers, mainLimit);
+  const waitingPlayers = Math.max(0, totalPlayers - mainLimit);
+  const fillPct = mainLimit > 0 ? Math.min(100, Math.round(mainPlayers / mainLimit * 100)) : 0;
+  const canAddGuest = currentUser && p.sport !== "No Games" && totalPlayers < maxPlayers;
+  const canJoin = currentUser && p.sport !== "No Games" && totalPlayers < maxPlayers && !blocked;
+  const isIn = !!currentUser && players.some(pl => pl.uid === currentUser.uid);
+
+  const SVG = {
+    share:   `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="22" x2="11" y1="2" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>`,
+    block:   `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="4.93" x2="19.07" y1="4.93" y2="19.07"/></svg>`,
+    unblock: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></svg>`,
+    guest:   `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>`,
+    join:    `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="19" x2="19" y1="8" y2="14"/><line x1="22" x2="16" y1="11" y2="11"/></svg>`,
+    joined:  `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><polyline points="16 11 18 13 22 9"/></svg>`,
+    leave:   `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" x2="9" y1="12" y2="12"/></svg>`,
+  };
+
+  const row = document.createElement("div");
+  row.className = "slot-row";
+  row.setAttribute("data-slot-id", slot.id);
+  row.setAttribute("data-prio", prio);
+
+  // ── Main info ──
+  const mainInfo = document.createElement("div");
+  mainInfo.className = "slot-row-main";
+
+  const prioBadge = document.createElement("span");
+  prioBadge.className = `priority-pill ${prio === 0 ? "p0" : "p1"}`;
+  prioBadge.textContent = prio === 0 ? "P0" : "P1";
+  mainInfo.appendChild(prioBadge);
+
+  const sportEl = document.createElement("div");
+  sportEl.className = "slot-row-sport";
+  sportEl.textContent = p.sport;
+  mainInfo.appendChild(sportEl);
+
+  if (!dayBlocked) {
+    const fillSection = document.createElement("div");
+    fillSection.className = "slot-row-fill";
+
+    const barWrap = document.createElement("div");
+    barWrap.className = "fill-bar-wrap";
+    const bar = document.createElement("div");
+    bar.className = "fill-bar" + (waitingPlayers > 0 ? " waiting" : fillPct >= 100 ? " full" : "");
+    bar.style.width = fillPct + "%";
+    barWrap.appendChild(bar);
+    fillSection.appendChild(barWrap);
+
+    const countEl = document.createElement("span");
+    countEl.className = "fill-count";
+    countEl.textContent = `${mainPlayers}/${mainLimit}`;
+    fillSection.appendChild(countEl);
+
+    if (waitingPlayers > 0) {
+      const waitEl = document.createElement("span");
+      waitEl.className = "waiting-chip";
+      waitEl.textContent = `+${waitingPlayers}`;
+      fillSection.appendChild(waitEl);
+    }
+
+    mainInfo.appendChild(fillSection);
+  }
+
+  if (slotBlocked) {
+    const blockNotice = document.createElement("span");
+    blockNotice.className = "slot-row-block-notice";
+    blockNotice.textContent = blockedSlots[`${slot.id}_${prio}`]?.note || "Blocked";
+    mainInfo.appendChild(blockNotice);
+  }
+
+  row.appendChild(mainInfo);
+
+  // ── Action buttons ──
+  const actions = document.createElement("div");
+  actions.className = "slot-row-actions";
+
+  const shareBtn = document.createElement("button");
+  shareBtn.className = "btn share-btn-top";
+  shareBtn.innerHTML = SVG.share;
+  shareBtn.title = "Share on WhatsApp";
+  shareBtn.onclick = () => shareSlotOnWhatsApp(slot, prio, p, block);
+  actions.appendChild(shareBtn);
+
+  if (isAdmin && p.sport !== "No Games") {
+    const blockBtn = document.createElement("button");
+    blockBtn.className = slotBlocked ? "btn unblock-btn-top" : "btn block-btn-top";
+    blockBtn.innerHTML = slotBlocked ? SVG.unblock : SVG.block;
+    blockBtn.title = slotBlocked ? "Unblock this slot" : "Block this slot";
+    blockBtn.onclick = () => toggleBlockSlot(slot.id, prio, slot, p, !slotBlocked);
+    actions.appendChild(blockBtn);
+  }
+
+  if (canAddGuest && !slotBlocked) {
+    const guestBtn = document.createElement("button");
+    guestBtn.className = "btn guest-btn-top";
+    guestBtn.innerHTML = SVG.guest;
+    guestBtn.title = "Add Guest";
+    guestBtn.onclick = () => showGuestModal(slot.id, prio);
+    actions.appendChild(guestBtn);
+  }
+
+  const joinBtn = document.createElement("button");
+  joinBtn.className = "btn primary";
+  joinBtn.innerHTML = isIn ? SVG.joined : SVG.join;
+  joinBtn.title = blocked ? "Slot is blocked" : (isIn ? "Joined" : "Join");
+  joinBtn.disabled = !currentUser || isIn || !canJoin || blocked;
+  joinBtn.onclick = () => updateSignup(slot.id, prio, "join");
+  actions.appendChild(joinBtn);
+
+  const leaveBtn = document.createElement("button");
+  leaveBtn.className = "btn";
+  leaveBtn.innerHTML = SVG.leave;
+  leaveBtn.title = blocked ? "Slot is blocked" : "Leave";
+  leaveBtn.disabled = !currentUser || !isIn || blocked;
+  leaveBtn.onclick = () => updateSignup(slot.id, prio, "leave");
+  actions.appendChild(leaveBtn);
+
+  row.appendChild(actions);
+  return row;
+}
+
+function renderTimeBlock(entries) {
+  // Group by blockId (TIME_BLOCKS order), then by slot.id within each block
+  const blockMap = new Map();
+  entries.forEach(({ slot, prio }) => {
+    if (!blockMap.has(slot.blockId)) blockMap.set(slot.blockId, new Map());
+    const slotMap = blockMap.get(slot.blockId);
+    if (!slotMap.has(slot.id)) slotMap.set(slot.id, []);
+    slotMap.get(slot.id).push({ slot, prio });
+  });
+
+  const fragment = document.createDocumentFragment();
+
+  TIME_BLOCKS.forEach(tb => {
+    if (!blockMap.has(tb.id)) return;
+
+    const timeBlock = document.createElement("div");
+    timeBlock.className = "time-block";
+
+    const label = document.createElement("div");
+    label.className = "time-block-label";
+    label.textContent = tb.label;
+    timeBlock.appendChild(label);
+
+    blockMap.get(tb.id).forEach((slotEntries, slotId) => {
+      const group = document.createElement("div");
+      group.className = "slot-group";
+
+      // Mark group active if any priority is the computed active one
+      const hasActive = slotEntries.some(e => computeActivePriority(e.slot) === e.prio);
+      if (hasActive) group.classList.add("active");
+
+      // Mark group blocked if the slot itself is blocked at day level
+      if (slotEntries.length && isDayBlocked(slotEntries[0].slot.dayIndex)) {
+        group.classList.add("slot-group-blocked");
+      }
+
+      slotEntries.forEach(({ slot, prio }, idx) => {
+        if (idx > 0) {
+          const divider = document.createElement("div");
+          divider.className = "slot-group-divider";
+          group.appendChild(divider);
+        }
+        group.appendChild(renderSlotRow(slot, prio));
+      });
+
+      timeBlock.appendChild(group);
+    });
+
+    fragment.appendChild(timeBlock);
+  });
+
+  return fragment;
 }
 
 function getDateLabel(dayIndex) {
