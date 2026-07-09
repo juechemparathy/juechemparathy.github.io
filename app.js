@@ -1901,7 +1901,7 @@ function shareSlotOnWhatsApp(slot, prio, p, block) {
   const playerNames = (p.players || [])
     .map(pl => toCamelCase(pl.name || "Player"))
     .join(", ");
-  const message = `*Come join us for ${sport}!* 🎉\n` +
+  const message = `🏸 *Come join us for ${sport}!* 🎉\n` +
     `📅 ${dayName}, ${dateLabel}\n` +
     `⏰ ${timeLabel}\n` +
     `👥 ${totalPlayers}/${maxPlayers} spots filled\n` +
