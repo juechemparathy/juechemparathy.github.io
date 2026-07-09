@@ -1898,10 +1898,15 @@ function shareSlotOnWhatsApp(slot, prio, p, block) {
   
   // Create share message
   // Add space before URL to help WhatsApp Web recognize it as clickable
-  const message = `🏸 *${sport}* - ${dayName}, ${dateLabel}\n` +
+  const playerNames = (p.players || [])
+    .map(pl => toCamelCase(pl.name || "Player"))
+    .join(", ");
+  const message = `*Come join us for ${sport}!* 🎉\n` +
+    `📅 ${dayName}, ${dateLabel}\n` +
     `⏰ ${timeLabel}\n` +
-    `👥 ${totalPlayers} players joined\n` +
-    `\nJoin this game:\n \n${deepLink}`;
+    `👥 ${totalPlayers}/${maxPlayers} spots filled\n` +
+    (playerNames ? `\n${playerNames}\n` : "") +
+    `\nTap to join:\n \n${deepLink}`;
   
   // WhatsApp share URL
   const whatsappUrl = `https://wa.me/?text=${encodeURIComponent(message)}`;
