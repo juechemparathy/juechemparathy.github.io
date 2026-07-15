@@ -149,11 +149,12 @@
         .contribute-btn:disabled { background: #cbd5e1; cursor: not-allowed; transform: none; }
 
         .share-btn {
-            flex-shrink: 0; padding: 10px 14px; border-radius: 10px;
-            border: 1px solid #e2e8f0; background: #fff; font-size: 1.05rem; line-height: 1;
+            flex-shrink: 0; display: inline-flex; align-items: center; justify-content: center;
+            padding: 10px 14px; border-radius: 10px;
+            border: 1px solid #25d366; background: #25d366; color: #fff;
             cursor: pointer; transition: all 0.2s; font-family: inherit;
         }
-        .share-btn:hover { background: #f8fafc; border-color: #cbd5e1; transform: translateY(-1px); }
+        .share-btn:hover { background: #20ba5a; border-color: #20ba5a; transform: translateY(-1px); }
 
         .contributors-toggle {
             font-size: 0.8rem; color: #7c3aed; background: none; border: none; cursor: pointer;
@@ -365,15 +366,13 @@ function storeBadgeLabel(store) {
 function shareItem(itemId, itemName) {
     const baseUrl = window.location.origin + window.location.pathname;
     const deepLink = `${baseUrl}?item=${encodeURIComponent(itemId)}`;
-    const shareText = `🎁 Help us get the "${itemName}" for SMASH! Every contribution counts.`;
+    // Add space before URL to help WhatsApp Web recognize it as clickable
+    const message = `🎁 *Help us get the "${itemName}" for SMASH!* 🎉\n` +
+        `Every contribution counts.\n` +
+        `\nView & contribute:\n \n${deepLink}`;
 
-    if (navigator.share) {
-        navigator.share({ title: 'SMASH Wishlist', text: shareText, url: deepLink }).catch(() => {});
-        return;
-    }
-
-    const message = `${shareText}\n\n${deepLink}`;
-    window.open(`https://wa.me/?text=${encodeURIComponent(message)}`, '_blank');
+    const whatsappUrl = `https://wa.me/?text=${encodeURIComponent(message)}`;
+    window.open(whatsappUrl, '_self');
 }
 
 function handleItemDeepLink() {
@@ -432,7 +431,7 @@ function renderItems(items) {
                     <button class="contribute-btn" ${secured ? 'disabled' : ''} onclick="openContributeModal('${item.id}', '${escapeHtml(item.name).replace(/'/g, "\\'")}')">
                         ${secured ? 'Fully Funded' : 'Contribute'}
                     </button>
-                    <button class="share-btn" title="Share this item" onclick="shareItem('${item.id}', '${escapeHtml(item.name).replace(/'/g, "\\'")}')">📤</button>
+                    <button class="share-btn" title="Share on WhatsApp" onclick="shareItem('${item.id}', '${escapeHtml(item.name).replace(/'/g, "\\'")}')"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="22" x2="11" y1="2" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg></button>
                 </div>
             </div>
         </div>`;
