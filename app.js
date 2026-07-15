@@ -1378,6 +1378,7 @@ function renderAdCard(item) {
   card.innerHTML = `
     <div class="ad-card-image">
       <span class="store-badge ${item.store === "walmart" ? "walmart" : "amazon"}">${storeLabel}</span>
+      <span class="wishlist-pill">Wishlist</span>
       ${item.imageUrl
         ? `<img src="${escapeHtmlJs(item.imageUrl)}" alt="${escapeHtmlJs(item.name)}" onerror="this.remove()" />`
         : `<span class="ad-card-placeholder">🎁</span>`}

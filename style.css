@@ -343,6 +343,7 @@ body {
 .store-badge { position: absolute; top: 8px; left: 8px; padding: 3px 9px; border-radius: var(--r-full); font-size: .68rem; font-weight: 700; letter-spacing: .03em; color: #fff; }
 .store-badge.amazon { background: #ff9900; }
 .store-badge.walmart { background: #0071ce; }
+.wishlist-pill { position: absolute; top: 8px; right: 8px; padding: 3px 9px; border-radius: var(--r-full); font-size: .68rem; font-weight: 700; letter-spacing: .03em; color: #fff; background: linear-gradient(90deg, var(--active), #7c3aed); }
 .progress-label { font-size: .78rem; color: var(--muted); font-weight: 600; display: flex; justify-content: space-between; }
 .progress-track { height: 8px; background: var(--border); border-radius: var(--r-full); overflow: hidden; }
 .progress-fill { height: 100%; border-radius: var(--r-full); background: linear-gradient(90deg, var(--active), #7c3aed); }
