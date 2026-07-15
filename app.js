@@ -1361,32 +1361,107 @@ function escapeHtmlJs(str) {
   return div.innerHTML;
 }
 
+function formatMoneyJs(n) {
+  return (Number(n) || 0).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 2 });
+}
+
 function renderAdCard(item) {
   const card = document.createElement("div");
   card.className = "slot-card ad-card";
 
-  const pct = item.goalAmount > 0
-    ? Math.min(100, Math.round(((item.raisedAmount || 0) / item.goalAmount) * 100))
-    : 0;
+  const goal = Number(item.goalAmount) || 0;
+  const raised = Number(item.raisedAmount) || 0;
+  const pct = goal > 0 ? Math.min(100, Math.round((raised / goal) * 100)) : 0;
+  const storeLabel = item.store === "walmart" ? "Walmart" : "Amazon";
+  const nameEsc = escapeHtmlJs(item.name).replace(/'/g, "\\'");
 
   card.innerHTML = `
-    <div class="slot-time">
-      <span>Wishlist</span>
-      <span class="priority-pill ad-pill">Ad</span>
-    </div>
     <div class="ad-card-image">
+      <span class="store-badge ${item.store === "walmart" ? "walmart" : "amazon"}">${storeLabel}</span>
       ${item.imageUrl
         ? `<img src="${escapeHtmlJs(item.imageUrl)}" alt="${escapeHtmlJs(item.name)}" onerror="this.remove()" />`
         : `<span class="ad-card-placeholder">🎁</span>`}
     </div>
-    <div class="ad-card-name">${escapeHtmlJs(item.name)}</div>
-    <div class="ad-card-progress">
-      <div class="progress-track"><div class="progress-fill" style="width:${pct}%;"></div></div>
-      <span>${pct}% funded</span>
+    <div class="ad-card-body">
+      <div class="ad-card-name">${escapeHtmlJs(item.name)}</div>
+      ${item.notes ? `<div class="ad-card-notes">${escapeHtmlJs(item.notes)}</div>` : ""}
+      ${item.productUrl ? `<a href="${escapeHtmlJs(item.productUrl)}" target="_blank" rel="noopener" class="ad-card-link">View on ${storeLabel} →</a>` : ""}
+      <div>
+        <div class="progress-label"><span>$${formatMoneyJs(raised)} of $${formatMoneyJs(goal)}</span><span>${pct}%</span></div>
+        <div class="progress-track"><div class="progress-fill" style="width:${pct}%;"></div></div>
+      </div>
+      <button type="button" class="contribute-btn" onclick="openContributeModal('${item.id}', '${nameEsc}')">Contribute</button>
+      <a href="wishlist.html" class="ad-card-wishlist-link">Go to Wishlist →</a>
     </div>
-    <a href="wishlist.html" class="btn primary ad-card-cta">Support this wish →</a>
   `;
   return card;
+}
+
+let activeAdItemId = null;
+
+function openContributeModal(itemId, itemName) {
+  activeAdItemId = itemId;
+  document.getElementById("modalItemName").textContent = itemName;
+  document.getElementById("contributeForm").reset();
+  document.getElementById("contributeModal").classList.add("show");
+}
+
+function closeContributeModal() {
+  document.getElementById("contributeModal").classList.remove("show");
+  activeAdItemId = null;
+}
+
+async function submitContribution(ev) {
+  ev.preventDefault();
+  if (!activeAdItemId) return;
+
+  const contributorName = document.getElementById("contributorName").value.trim();
+  const amount = parseFloat(document.getElementById("contributionAmount").value);
+  const note = document.getElementById("contributionNote").value.trim();
+
+  if (!contributorName || !(amount > 0)) {
+    alert("Please enter your name and a valid amount.");
+    return;
+  }
+
+  const btn = document.getElementById("contributeSubmitBtn");
+  btn.disabled = true;
+
+  const itemRef = db.collection("wishlistItems").doc(activeAdItemId);
+  const contributionRef = itemRef.collection("contributions").doc();
+
+  try {
+    await db.runTransaction(async tx => {
+      const itemDoc = await tx.get(itemRef);
+      if (!itemDoc.exists) throw new Error("This item no longer exists.");
+
+      const item = itemDoc.data();
+      if (item.status === "secured") throw new Error("This item is already fully funded.");
+
+      const goal = Number(item.goalAmount) || 0;
+      const newRaised = (Number(item.raisedAmount) || 0) + amount;
+      const newStatus = goal > 0 && newRaised >= goal ? "secured" : "open";
+
+      tx.update(itemRef, {
+        raisedAmount: newRaised,
+        status: newStatus,
+        updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+      });
+      tx.set(contributionRef, {
+        contributorName,
+        amount,
+        note,
+        createdAt: firebase.firestore.FieldValue.serverTimestamp()
+      });
+    });
+
+    alert("Thank you for your contribution!");
+    closeContributeModal();
+  } catch (err) {
+    console.error("Contribution error:", err);
+    alert(err.message || "Failed to record contribution.");
+  }
+  btn.disabled = false;
 }
 
 function appendToTrack(track, entries) {
