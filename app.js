@@ -256,6 +256,7 @@ auth.onAuthStateChanged(u => {
     subscribeBlockedDays(); // Load blocked days
     subscribeBlockedSlots(); // Load blocked slots
     subscribeSchedule();
+    subscribeWishlistAds();
     // Handle deep link after login (in case user clicked link before logging in)
     setTimeout(() => handleDeepLink(), 500);
   } else {
@@ -265,6 +266,7 @@ auth.onAuthStateChanged(u => {
     if (unsubscribe) unsubscribe();
     if (unsubscribeBlockedDays) unsubscribeBlockedDays();
     if (unsubscribeBlockedSlots) unsubscribeBlockedSlots();
+    if (unsubscribeAds) unsubscribeAds();
     userPreferences = null;
     blockedDays = {};
     blockedSlots = {};
@@ -833,8 +835,23 @@ const tabContent = document.getElementById("tabContent");
 let unsubscribe = null;
 let unsubscribeBlockedDays = null;
 let unsubscribeBlockedSlots = null;
+let unsubscribeAds = null;
 let selectedSport = null;
 let latestSlots = [];
+let latestAdItems = [];
+
+function subscribeWishlistAds() {
+  if (unsubscribeAds) unsubscribeAds();
+
+  unsubscribeAds = db.collection("wishlistItems")
+    .where("adEnabled", "==", true)
+    .onSnapshot(snap => {
+      latestAdItems = snap.docs
+        .map(doc => ({ id: doc.id, ...doc.data() }))
+        .filter(item => item.status !== "secured");
+      renderTabContent();
+    }, err => console.error(err));
+}
 
 function subscribeSchedule() {
   if (unsubscribe) unsubscribe();
@@ -1338,6 +1355,40 @@ function renderSlotCard(slot, prio) {
   return card;
 }
 
+function escapeHtmlJs(str) {
+  const div = document.createElement("div");
+  div.textContent = str ?? "";
+  return div.innerHTML;
+}
+
+function renderAdCard(item) {
+  const card = document.createElement("div");
+  card.className = "slot-card ad-card";
+
+  const pct = item.goalAmount > 0
+    ? Math.min(100, Math.round(((item.raisedAmount || 0) / item.goalAmount) * 100))
+    : 0;
+
+  card.innerHTML = `
+    <div class="slot-time">
+      <span>Wishlist</span>
+      <span class="priority-pill ad-pill">Ad</span>
+    </div>
+    <div class="ad-card-image">
+      ${item.imageUrl
+        ? `<img src="${escapeHtmlJs(item.imageUrl)}" alt="${escapeHtmlJs(item.name)}" onerror="this.remove()" />`
+        : `<span class="ad-card-placeholder">🎁</span>`}
+    </div>
+    <div class="ad-card-name">${escapeHtmlJs(item.name)}</div>
+    <div class="ad-card-progress">
+      <div class="progress-track"><div class="progress-fill" style="width:${pct}%;"></div></div>
+      <span>${pct}% funded</span>
+    </div>
+    <a href="wishlist.html" class="btn primary ad-card-cta">Support this wish →</a>
+  `;
+  return card;
+}
+
 function appendToTrack(track, entries) {
   // Group entries by slot.id so P0 + P1 of the same slot share a wrapper
   const seen = new Map();
@@ -1345,6 +1396,9 @@ function appendToTrack(track, entries) {
     if (!seen.has(e.slot.id)) seen.set(e.slot.id, []);
     seen.get(e.slot.id).push(e);
   });
+  let unitCount = 0;
+  let adIndex = 0;
+
   seen.forEach(slotEntries => {
     if (slotEntries.length === 1) {
       track.appendChild(renderSlotCard(slotEntries[0].slot, slotEntries[0].prio));
@@ -1358,6 +1412,12 @@ function appendToTrack(track, entries) {
       pair.appendChild(pairHeader);
       slotEntries.forEach(e => pair.appendChild(renderSlotCard(e.slot, e.prio)));
       track.appendChild(pair);
+    }
+
+    unitCount++;
+    if (unitCount % 2 === 0 && latestAdItems.length > 0) {
+      track.appendChild(renderAdCard(latestAdItems[adIndex % latestAdItems.length]));
+      adIndex++;
     }
   });
 }

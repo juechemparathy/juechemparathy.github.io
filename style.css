@@ -330,6 +330,17 @@ body {
 .priority-pill.p0 { background: var(--p0); }
 .priority-pill.p1 { background: var(--p1); }
 
+.ad-card::before { background: linear-gradient(90deg, #f59e0b, #ec4899); }
+.ad-pill { background: #f59e0b; }
+.ad-card-image { display: flex; justify-content: center; align-items: center; height: 100px; overflow: hidden; border-radius: var(--r-sm); background: #f8fafc; }
+.ad-card-image img { max-width: 100%; max-height: 100%; object-fit: contain; }
+.ad-card-placeholder { font-size: 2.5rem; }
+.ad-card-name { font-weight: 700; font-size: .9rem; color: var(--fg); }
+.ad-card-progress { display: flex; flex-direction: column; gap: 4px; font-size: .78rem; color: var(--muted); }
+.progress-track { height: 6px; background: var(--border); border-radius: var(--r-full); overflow: hidden; }
+.progress-fill { height: 100%; background: var(--active); border-radius: var(--r-full); }
+.ad-card-cta { text-decoration: none; text-align: center; font-size: .85rem; font-weight: 600; }
+
 .sport-tag {
   display: flex;
   align-items: center;
