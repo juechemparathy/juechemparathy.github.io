@@ -245,8 +245,8 @@
                     <input type="text" id="editLastName" required />
                 </div>
                 <div class="form-group full">
-                    <label for="editFamilyId">Family ID *</label>
-                    <input type="number" id="editFamilyId" required min="1" />
+                    <label for="editFamilyId">Family ID</label>
+                    <input type="number" id="editFamilyId" min="1" />
                 </div>
                 <div class="form-group">
                     <label for="editAdults">Adults</label>
@@ -446,38 +446,6 @@ function renderResponses() {
     });
 }
 
-// Load and cache family.csv data
-var cachedFamilyData = null;
-async function loadFamilyCSV() {
-    if (cachedFamilyData) return cachedFamilyData;
-    var response = await fetch('family.csv?v=' + Date.now());
-    var text = await response.text();
-    var lines = text.split('\n').map(function(l) { return l.trim(); }).filter(function(l) { return l; });
-    if (lines.length < 2) return [];
-
-    var headers = lines[0].split(',').map(function(h) { return h.trim().toLowerCase(); });
-    var fidIdx = headers.findIndex(function(h) { return /^(fid|family.?id|familyid)$/.test(h); });
-    var fnIdx = headers.findIndex(function(h) { return /^(first.?name|firstname|first)$/.test(h); });
-    var lnIdx = headers.findIndex(function(h) { return /^(last.?name|lastname|last)$/.test(h); });
-
-    if (fidIdx === -1 || fnIdx === -1 || lnIdx === -1) {
-        console.error('family.csv missing required columns. Found:', headers);
-        return [];
-    }
-
-    cachedFamilyData = [];
-    for (var i = 1; i < lines.length; i++) {
-        var cols = lines[i].split(',').map(function(c) { return c.trim(); });
-        var fid = parseInt(cols[fidIdx]);
-        var fn = cols[fnIdx] || '';
-        var ln = cols[lnIdx] || '';
-        if (!isNaN(fid) && fid > 0 && fn) {
-            cachedFamilyData.push({ fid: fid, firstName: fn, lastName: ln });
-        }
-    }
-    return cachedFamilyData;
-}
-
 // Delete response
 async function deleteResponse(docId, name) {
     if (!confirm('Delete RSVP from "' + name + '"? This cannot be undone.')) return;
@@ -516,72 +484,51 @@ async function saveEdit(ev) {
     btn.disabled = true;
     btn.textContent = 'Saving...';
 
+    var editFirstName = document.getElementById('editFirstName').value.trim();
+    var editLastName = document.getElementById('editLastName').value.trim();
     var familyIdRaw = document.getElementById('editFamilyId').value.trim();
-    var familyId = parseInt(familyIdRaw);
+    var familyId = familyIdRaw ? parseInt(familyIdRaw) : null;
 
-    if (!familyIdRaw || isNaN(familyId) || familyId < 1 || !Number.isInteger(familyId)) {
+    if (familyIdRaw && (isNaN(familyId) || familyId < 1 || !Number.isInteger(familyId))) {
         showToast('Family ID must be a positive whole number.', 'error');
         btn.disabled = false;
         btn.textContent = 'Save Changes';
         return;
     }
 
-    // Check if another response already has this Family ID for this event
-    var existing = await db.collection('rsvpResponses')
-        .where('eventId', '==', eventId)
-        .where('familyId', '==', familyId)
-        .get();
+    if (familyId) {
+        // Check if another response already has this Family ID for this event
+        var existing = await db.collection('rsvpResponses')
+            .where('eventId', '==', eventId)
+            .where('familyId', '==', familyId)
+            .get();
 
-    var isDuplicate = false;
-    existing.forEach(function(doc) {
-        if (doc.id !== editingDocId) isDuplicate = true;
-    });
-
-    if (isDuplicate) {
-        showToast('Another RSVP already exists with this Family ID.', 'error');
-        btn.disabled = false;
-        btn.textContent = 'Save Changes';
-        return;
-    }
-
-    // Validate against family.csv
-    var editFirstName = document.getElementById('editFirstName').value.trim();
-    var editLastName = document.getElementById('editLastName').value.trim();
-    try {
-        var familyData = await loadFamilyCSV();
-        var familyMembers = familyData.filter(function(m) { return m.fid === familyId; });
-
-        if (familyMembers.length === 0) {
-            showToast('Family ID ' + familyId + ' not found in family records.', 'error');
-            btn.disabled = false;
-            btn.textContent = 'Save Changes';
-            return;
-        }
-
-        var nameMatch = familyMembers.some(function(m) {
-            return m.firstName.toLowerCase() === editFirstName.toLowerCase()
-                && m.lastName.toLowerCase() === editLastName.toLowerCase();
+        var isDuplicate = false;
+        existing.forEach(function(doc) {
+            if (doc.id !== editingDocId) isDuplicate = true;
         });
 
-        if (!nameMatch) {
-            showToast('"' + editFirstName + ' ' + editLastName + '" does not match Family ID ' + familyId + '.', 'error');
+        if (isDuplicate) {
+            showToast('Another RSVP already exists with this Family ID.', 'error');
             btn.disabled = false;
             btn.textContent = 'Save Changes';
             return;
         }
-    } catch (err) {
-        console.error('Error validating family data:', err);
-        // Skip validation if CSV fetch fails
     }
 
     var data = {
         firstName: editFirstName,
-        lastName: document.getElementById('editLastName').value.trim(),
-        familyId: familyId,
+        lastName: editLastName,
         adults: parseInt(document.getElementById('editAdults').value),
         kids: parseInt(document.getElementById('editKids').value),
         updatedAt: firebase.firestore.FieldValue.serverTimestamp()
     };
+
+    if (familyId) {
+        data.familyId = familyId;
+    } else {
+        data.familyId = firebase.firestore.FieldValue.delete();
+    }
 
     try {
         await db.collection('rsvpResponses').doc(editingDocId).update(data);

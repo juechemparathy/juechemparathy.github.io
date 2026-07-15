@@ -267,18 +267,15 @@
             <div class="form-grid">
                 <div class="form-group">
                     <label for="firstName">First Name *</label>
-                    <input type="text" id="firstName" required placeholder="e.g. John" onblur="lookupFamilyId()" />
+                    <input type="text" id="firstName" required placeholder="e.g. John" onblur="checkExistingRsvp()" />
                 </div>
                 <div class="form-group">
                     <label for="lastName">Last Name *</label>
-                    <input type="text" id="lastName" required placeholder="e.g. Smith" onblur="lookupFamilyId()" />
+                    <input type="text" id="lastName" required placeholder="e.g. Smith" onblur="checkExistingRsvp()" />
                 </div>
                 <div class="form-group full">
-                    <label for="familyId">Family ID *</label>
-                    <select id="familyId" required onchange="onFamilyIdSelected()">
-                        <option value="">Enter your name to find Family ID</option>
-                    </select>
-                    <small id="familyIdHint" style="color:#6b7280; font-size:0.8rem;"></small>
+                    <label for="familyId">Family ID</label>
+                    <input type="number" id="familyId" min="1" placeholder="Optional" onblur="checkExistingRsvp()" />
                 </div>
                 <div class="form-group">
                     <label for="adults">Adults</label>
@@ -415,32 +412,16 @@ async function loadUserRsvps() {
         var userFirst = parts[0].toLowerCase();
         var userLast = parts.slice(1).join(' ').toLowerCase();
 
-        // Find matching Family IDs from CSV
-        var matchingFids = [];
-        try {
-            var familyData = await loadFamilyCSV();
-            familyData.forEach(function(m) {
-                if (m.firstName.toLowerCase() === userFirst
-                    && m.lastName.toLowerCase() === userLast
-                    && matchingFids.indexOf(m.fid) === -1) {
-                    matchingFids.push(m.fid);
-                }
-            });
-        } catch (e) {
-            console.error('CSV load error:', e);
-        }
-
-        // Find all RSVPs matching by Family ID OR by firstName+lastName in responses
+        // Find all RSVPs matching by firstName+lastName in responses
         var allResponses = await db.collection('rsvpResponses').get();
         var myRsvps = [];
         var seenIds = {};
         allResponses.forEach(function(doc) {
             var d = doc.data();
-            var fidMatch = matchingFids.some(function(fid) { return fid == d.familyId; });
             var nameMatch = d.firstName && d.lastName
                 && d.firstName.toLowerCase() === userFirst
                 && d.lastName.toLowerCase() === userLast;
-            if ((fidMatch || nameMatch) && !seenIds[doc.id]) {
+            if (nameMatch && !seenIds[doc.id]) {
                 seenIds[doc.id] = true;
                 myRsvps.push({ id: doc.id, ...d });
             }
@@ -475,7 +456,7 @@ async function loadUserRsvps() {
                     '<div class="rsvp-event-name">' + escapeHtml(ev.name) + (isCurrent ? '<span class="editing-badge">Current Event</span>' : '') + '</div>' +
                     (isCurrent ? '' : '<div class="rsvp-event-time">&#128197; ' + formatEventTime(ev.eventTime) + '</div>') +
                     '<div class="rsvp-details">' +
-                        '<span><strong>Family ID:</strong> ' + escapeHtml(String(r.familyId)) + '</span>' +
+                        (r.familyId ? '<span><strong>Family ID:</strong> ' + escapeHtml(String(r.familyId)) + '</span>' : '') +
                         '<span><strong>Adults:</strong> ' + r.adults + '</span>' +
                         '<span><strong>Kids:</strong> ' + r.kids + '</span>' +
                     '</div>' +
@@ -488,39 +469,6 @@ async function loadUserRsvps() {
     } catch (err) {
         console.error('Error loading user RSVPs:', err);
     }
-}
-
-// Load and cache family.csv data
-var cachedFamilyData = null;
-async function loadFamilyCSV() {
-    if (cachedFamilyData) return cachedFamilyData;
-    var response = await fetch('family.csv?v=' + Date.now());
-    var text = await response.text();
-    var lines = text.split('\n').map(function(l) { return l.trim(); }).filter(function(l) { return l; });
-    if (lines.length < 2) return [];
-
-    // Parse header
-    var headers = lines[0].split(',').map(function(h) { return h.trim().toLowerCase(); });
-    var fidIdx = headers.findIndex(function(h) { return /^(fid|family.?id|familyid)$/.test(h); });
-    var fnIdx = headers.findIndex(function(h) { return /^(first.?name|firstname|first)$/.test(h); });
-    var lnIdx = headers.findIndex(function(h) { return /^(last.?name|lastname|last)$/.test(h); });
-
-    if (fidIdx === -1 || fnIdx === -1 || lnIdx === -1) {
-        console.error('family.csv missing required columns. Found:', headers);
-        return [];
-    }
-
-    cachedFamilyData = [];
-    for (var i = 1; i < lines.length; i++) {
-        var cols = lines[i].split(',').map(function(c) { return c.trim(); });
-        var fid = parseInt(cols[fidIdx]);
-        var fn = cols[fnIdx] || '';
-        var ln = cols[lnIdx] || '';
-        if (!isNaN(fid) && fid > 0 && fn) {
-            cachedFamilyData.push({ fid: fid, firstName: fn, lastName: ln });
-        }
-    }
-    return cachedFamilyData;
 }
 
 function showError(title, message) {
@@ -539,108 +487,43 @@ function showInfo(show) {
     document.getElementById('infoBanner').style.display = show ? 'block' : 'none';
 }
 
-// Lookup Family ID based on First Name + Last Name
-var lastLookupKey = '';
-async function lookupFamilyId() {
+// Find an existing RSVP for this event matching the entered Family ID (if any)
+// or, failing that, the entered First + Last Name.
+async function findExistingRsvp(familyId, firstName, lastName) {
+    var fn = firstName.toLowerCase();
+    var ln = lastName.toLowerCase();
+
+    var snapshot = await db.collection('rsvpResponses')
+        .where('eventId', '==', eventId)
+        .get();
+
+    var existingDoc = null;
+    snapshot.forEach(function(doc) {
+        var d = doc.data();
+        var fidMatch = familyId && d.familyId == familyId;
+        var nameMatch = d.firstName && d.lastName
+            && d.firstName.toLowerCase() === fn
+            && d.lastName.toLowerCase() === ln;
+        if (fidMatch || nameMatch) {
+            existingDoc = { id: doc.id, ...d };
+        }
+    });
+    return existingDoc;
+}
+
+// Re-check for an existing RSVP whenever Family ID or Name changes
+async function checkExistingRsvp() {
     var fn = document.getElementById('firstName').value.trim();
     var ln = document.getElementById('lastName').value.trim();
     if (!fn || !ln) return;
 
-    var lookupKey = fn.toLowerCase() + '|' + ln.toLowerCase();
-    if (lookupKey === lastLookupKey) return; // avoid duplicate lookups
-    lastLookupKey = lookupKey;
-
-    hideError();
-    showInfo(false);
-
-    var select = document.getElementById('familyId');
-    var hint = document.getElementById('familyIdHint');
-
-    try {
-        var familyData = await loadFamilyCSV();
-        if (familyData.length === 0) {
-            hint.textContent = '';
-            return;
-        }
-
-        // Find matching members (case-insensitive)
-        var matches = familyData.filter(function(m) {
-            return m.firstName.toLowerCase() === fn.toLowerCase()
-                && m.lastName.toLowerCase() === ln.toLowerCase();
-        });
-
-        // Get unique FIDs
-        var fids = [];
-        matches.forEach(function(m) {
-            if (fids.indexOf(m.fid) === -1) fids.push(m.fid);
-        });
-
-        // Reset dropdown
-        select.innerHTML = '';
-        select.disabled = false;
-
-        if (fids.length === 0) {
-            select.innerHTML = '<option value="">No Family ID found</option>';
-            hint.textContent = 'No family found with this name. Please check your name.';
-            hint.style.color = '#ef4444';
-            // Reset any previous editing state
-            editingDocId = null;
-            showInfo(false);
-            document.getElementById('deleteBtn').style.display = 'none';
-            document.getElementById('formTitle').textContent = 'Your Response';
-            document.getElementById('submitBtn').textContent = 'Submit RSVP';
-        } else if (fids.length === 1) {
-            select.innerHTML = '<option value="' + fids[0] + '">' + fids[0] + '</option>';
-            hint.textContent = '';
-            hint.style.color = '#6b7280';
-            onFamilyIdSelected();
-        } else {
-            select.innerHTML = '<option value="">Select your Family ID</option>';
-            fids.forEach(function(fid) {
-                select.innerHTML += '<option value="' + fid + '">' + fid + '</option>';
-            });
-            hint.textContent = 'Multiple families found. Please select yours.';
-            hint.style.color = '#6b7280';
-            // Reset any previous editing state
-            editingDocId = null;
-            showInfo(false);
-            document.getElementById('deleteBtn').style.display = 'none';
-            document.getElementById('formTitle').textContent = 'Your Response';
-            document.getElementById('submitBtn').textContent = 'Submit RSVP';
-        }
-    } catch (err) {
-        console.error('Error looking up family:', err);
-        hint.textContent = '';
-    }
-}
-
-// When a Family ID is selected, check for existing RSVP
-async function onFamilyIdSelected() {
-    var select = document.getElementById('familyId');
-    var selectedFid = parseInt(select.value);
-    if (!selectedFid || isNaN(selectedFid)) {
-        showInfo(false);
-        editingDocId = null;
-        enableFormFields(true);
-        document.getElementById('deleteBtn').style.display = 'none';
-        document.getElementById('formTitle').textContent = 'Your Response';
-        document.getElementById('submitBtn').textContent = 'Submit RSVP';
-        return;
-    }
+    var familyIdVal = document.getElementById('familyId').value.trim();
+    var familyId = familyIdVal ? parseInt(familyIdVal) : null;
 
     hideError();
 
     try {
-        var snapshot = await db.collection('rsvpResponses')
-            .where('eventId', '==', eventId)
-            .get();
-
-        var existingDoc = null;
-        snapshot.forEach(function(doc) {
-            if (doc.data().familyId == selectedFid) {
-                existingDoc = { id: doc.id, ...doc.data() };
-            }
-        });
+        var existingDoc = await findExistingRsvp(familyId, fn, ln);
 
         if (existingDoc) {
             // Existing RSVP found — offer update
@@ -681,29 +564,15 @@ async function handleSubmit(ev) {
 
     hideError();
 
-    var familyIdVal = document.getElementById('familyId').value;
-    var familyId = parseInt(familyIdVal);
-
-    if (!familyIdVal || isNaN(familyId) || familyId < 1) {
-        showError('Family ID Required', 'Please enter your First Name and Last Name to look up your Family ID.');
-        btn.disabled = false;
-        btn.textContent = editingDocId ? 'Update RSVP' : 'Submit RSVP';
-        return;
-    }
+    var firstName = document.getElementById('firstName').value.trim();
+    var lastName = document.getElementById('lastName').value.trim();
+    var familyIdVal = document.getElementById('familyId').value.trim();
+    var familyId = familyIdVal ? parseInt(familyIdVal) : null;
 
     // If not already in edit mode, check for existing RSVP on submit
     if (!editingDocId) {
         try {
-            var snapshot = await db.collection('rsvpResponses')
-                .where('eventId', '==', eventId)
-                .get();
-
-            var existingDoc = null;
-            snapshot.forEach(function(doc) {
-                if (doc.data().familyId == familyId) {
-                    existingDoc = { id: doc.id, ...doc.data() };
-                }
-            });
+            var existingDoc = await findExistingRsvp(familyId, firstName, lastName);
 
             if (existingDoc) {
                 // Existing RSVP found — switch to update mode
@@ -744,9 +613,11 @@ async function handleSubmit(ev) {
         } else {
             // Create new RSVP
             data.eventId = eventId;
-            data.firstName = document.getElementById('firstName').value.trim();
-            data.lastName = document.getElementById('lastName').value.trim();
-            data.familyId = familyId;
+            data.firstName = firstName;
+            data.lastName = lastName;
+            if (familyId) {
+                data.familyId = familyId;
+            }
             data.submittedAt = firebase.firestore.FieldValue.serverTimestamp();
             if (currentUser) {
                 data.uid = currentUser.uid;
@@ -789,12 +660,7 @@ function resetForm() {
     enableFormFields(true);
     document.getElementById('deleteBtn').style.display = 'none';
     editingDocId = null;
-    lastLookupKey = '';
     document.getElementById('formTitle').textContent = 'Your Response';
-    // Reset family ID dropdown
-    var select = document.getElementById('familyId');
-    select.innerHTML = '<option value="">Enter your name to find Family ID</option>';
-    document.getElementById('familyIdHint').textContent = '';
     showState('mainContent');
     if (currentUser) {
         loadUserRsvps();
