@@ -138,13 +138,22 @@
         .progress-fill.secured { background: linear-gradient(90deg, #10b981, #059669); }
         .progress-label { font-size: 0.82rem; color: #475569; font-weight: 600; display: flex; justify-content: space-between; }
 
+        .item-actions { display: flex; gap: 8px; margin-top: 4px; }
+
         .contribute-btn {
-            margin-top: 4px; padding: 10px 16px; border-radius: 10px; border: none;
+            flex: 1; padding: 10px 16px; border-radius: 10px; border: none;
             background: #0f172a; color: #fff; font-weight: 700; font-size: 0.9rem;
             cursor: pointer; transition: all 0.2s; font-family: inherit;
         }
         .contribute-btn:hover { background: #1e293b; transform: translateY(-1px); }
         .contribute-btn:disabled { background: #cbd5e1; cursor: not-allowed; transform: none; }
+
+        .share-btn {
+            flex-shrink: 0; padding: 10px 14px; border-radius: 10px;
+            border: 1px solid #e2e8f0; background: #fff; font-size: 1.05rem; line-height: 1;
+            cursor: pointer; transition: all 0.2s; font-family: inherit;
+        }
+        .share-btn:hover { background: #f8fafc; border-color: #cbd5e1; transform: translateY(-1px); }
 
         .contributors-toggle {
             font-size: 0.8rem; color: #7c3aed; background: none; border: none; cursor: pointer;
@@ -322,6 +331,7 @@ const ADMIN_EMAILS = [
 
 let currentUser = null;
 let activeItemId = null;
+let deepLinkHandled = false;
 const contributionUnsubscribers = {};
 
 auth.onAuthStateChanged(user => {
@@ -350,6 +360,36 @@ function formatMoney(n) {
 
 function storeBadgeLabel(store) {
     return store === 'walmart' ? 'Walmart' : 'Amazon';
+}
+
+function shareItem(itemId, itemName) {
+    const baseUrl = window.location.origin + window.location.pathname;
+    const deepLink = `${baseUrl}?item=${encodeURIComponent(itemId)}`;
+    const shareText = `🎁 Help us get the "${itemName}" for SMASH! Every contribution counts.`;
+
+    if (navigator.share) {
+        navigator.share({ title: 'SMASH Wishlist', text: shareText, url: deepLink }).catch(() => {});
+        return;
+    }
+
+    const message = `${shareText}\n\n${deepLink}`;
+    window.open(`https://wa.me/?text=${encodeURIComponent(message)}`, '_blank');
+}
+
+function handleItemDeepLink() {
+    if (deepLinkHandled) return;
+    const params = new URLSearchParams(window.location.search);
+    const itemId = params.get('item');
+    if (!itemId) return;
+
+    const card = document.querySelector(`.item-card[data-id="${itemId}"]`);
+    if (!card) return;
+
+    deepLinkHandled = true;
+    card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    card.style.boxShadow = '0 0 0 4px rgba(59,130,246,.5)';
+    setTimeout(() => { card.style.boxShadow = ''; }, 2000);
+    window.history.replaceState({}, document.title, window.location.pathname);
 }
 
 function renderItems(items) {
@@ -388,12 +428,17 @@ function renderItems(items) {
                 <button class="contributors-toggle" onclick="toggleContributors('${item.id}')" id="toggle-${item.id}">Show contributors</button>
                 <div class="contributors-list" id="contributors-${item.id}"><p class="no-contributors">Loading...</p></div>
 
-                <button class="contribute-btn" ${secured ? 'disabled' : ''} onclick="openContributeModal('${item.id}', '${escapeHtml(item.name).replace(/'/g, "\\'")}')">
-                    ${secured ? 'Fully Funded' : 'Contribute'}
-                </button>
+                <div class="item-actions">
+                    <button class="contribute-btn" ${secured ? 'disabled' : ''} onclick="openContributeModal('${item.id}', '${escapeHtml(item.name).replace(/'/g, "\\'")}')">
+                        ${secured ? 'Fully Funded' : 'Contribute'}
+                    </button>
+                    <button class="share-btn" title="Share this item" onclick="shareItem('${item.id}', '${escapeHtml(item.name).replace(/'/g, "\\'")}')">📤</button>
+                </div>
             </div>
         </div>`;
     }).join('');
+
+    handleItemDeepLink();
 }
 
 function toggleContributors(itemId) {
