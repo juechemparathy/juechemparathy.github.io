@@ -1403,11 +1403,11 @@ function openContributeModal(itemId, itemName) {
   activeAdItemId = itemId;
   document.getElementById("modalItemName").textContent = itemName;
   document.getElementById("contributeForm").reset();
-  document.getElementById("contributeModal").classList.add("show");
+  document.getElementById("contributeModal").style.display = "flex";
 }
 
 function closeContributeModal() {
-  document.getElementById("contributeModal").classList.remove("show");
+  document.getElementById("contributeModal").style.display = "none";
   activeAdItemId = null;
 }
 
